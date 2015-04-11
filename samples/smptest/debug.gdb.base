@@ -1,0 +1,144 @@
+set solib-search-path $DMABASE/upgrade/lib:$PREFIX/lib
+target remote $CLIENTIP:1234
+break main
+cont
+clear main
+
+set pagination off
+
+break open
+commands
+printf "open(%s)\n", $a0
+#x/s $a0
+continue
+end
+
+break *open64+80
+commands
+printf "open64() rv = %d\n", $v0
+continue
+end
+
+break ioctl if $a0 == 3
+commands
+set variable $ioctl_addr = $a2
+printf "ioctl(fd %d, cmd 0x%08x minor_ioctl_%d, arg 0x%08x)\n", $a0, $a1, $a1 & 0xFF, $a2
+if $a2 != 0
+	x/7wx $a2
+	x/7wd $a2
+end
+cont
+end
+
+break ioctl if $a0 == 4
+commands
+set variable $ioctl_addr = $a2
+printf "ioctl(fd %d, cmd 0x%08x %c %d, arg0 0x%08x, arg1 0x%08x)\n", $a0, $a1, ($a1 >> 8) & 0xFF, $a1 & 0xFF, $a2, $a3
+if $a2 != 0
+	x/7wx $a2
+	x/7wd $a2
+end
+if $a3 != 0
+	x/7wx $a3
+	x/7wd $a3
+end
+cont
+end
+
+break *ioctl+56
+commands
+printf "ioctl() rv = %d\n", $v0
+if $ioctl_addr != 0
+	x/7wx $ioctl_addr
+	x/7wd $ioctl_addr
+end
+cont
+end
+
+break open
+commands
+x/s $a0
+finish
+p/d $v0
+end
+
+break ioctl
+commands
+p/d $a0
+p/x $a1
+p "ioctl cmd:"
+p/c ($a1 >> 8) & 0xFF
+x/7wx $a2
+end
+
+break mmap
+commands
+p/x $a0
+p/x $a1
+cont
+end
+
+break mmap64
+commands
+p/x $a0
+p/x $a1
+cont
+end
+
+break RUASetProperty
+commands
+printf "RUASetProperty(pRUA 0x%08x, ModuleID %d, PropertyID %d, pValue 0x%08x, ValueSize %d, Timeout %d)\n", $a0, $a1, $a2, $a3, {uint32_t *} ($sp + 64 + 16), {uint32_t *} ($sp + 64 + 20)
+if $a3 != 0
+	x/7wx $a3
+end
+cont
+end
+
+#break *RUASetProperty+156
+#commands
+#printf "RUASetProperty: rv = %d\n", $v0
+#cont
+#end
+
+break RUAGetProperty
+commands
+printf "RUAGetProperty(pRUA 0x%08x, ModuleID %d, PropertyID %d, pValue 0x%08x, ValueSize %d)\n", $a0, $a1, $a2, $a3, {uint32_t *} ($sp + 64 + 16)
+cont
+end
+
+#break *RUAGetProperty+92
+#commands
+#printf "RUAGetProperty: rv = %d\n", $v0
+## Print property
+#if {uint32_t *} ($sp + 40) != 0
+#	x/20wx {uint32_t *} ($sp + 40)
+#end
+#cont
+#end
+
+break *RUAExchangeProperty
+commands
+printf "RUAExchangeProperty(pRUA 0x%08x, ModuleID %d, PropertyID %d, pValueIn 0x%08x, ValueInSize %d, pValueOut 0x%08x, ValueOutSize %d)\n", $a0, $a1, $a2, $a3, {uint32_t *} ($sp + 16), {uint32_t *} ($sp + 20), {uint32_t *} ($sp + 24)
+# Print property
+if $a3 != 0
+	x/20wx $a3
+end
+cont
+end
+
+#break *RUAExchangeProperty+108
+#commands
+#printf "RUAExchangeProperty: rv = %d\n", $v0
+## Print property
+#if {uint32_t *} ($sp + 64 + 20) != 0
+#	x/20wx {uint32_t *} ($sp + 64 + 20)
+#end
+#cont
+#end
+
+break DCCEnableVideoSource
+
+display/i $pc
+#display $a1
+#display $a2
+#display/x $t9
