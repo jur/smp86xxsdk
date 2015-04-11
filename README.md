@@ -14,18 +14,18 @@ supported.
 
 # Toolchain
 You need a toolchain for building it, e.g.:
-git clone https://github.com/jur/smp86xx.git
-cd smp86xx
-. DMATOOLCHAIN.sh
-cd ..
+* git clone https://github.com/jur/smp86xx.git
+* cd smp86xx
+* . DMATOOLCHAIN.sh
+* cd ..
 
 # Build
 To build the SDK you need first to source the DMATOOLCHAIN.sh from the toolchain.
 
-git clone https://github.com/jur/smp86xxsdk.git
-cd smp86xxsdk
-make
-cd ..
+* git clone https://github.com/jur/smp86xxsdk.git
+* cd smp86xxsdk
+* make
+* cd ..
 
 # Run Test
 You need first to boot the Zyxel DMA-2500 and connect it to the network. The
@@ -35,9 +35,9 @@ You need a webserver running on your host system. The files are copied to
 /var/www/dma-2500/. You can change this in the config.mk file. You can also
 change the IP address of the Zyxel DMA-2500.
 To run the test you need first to source the DMATOOLCHAIN.sh from the toolchain.
-cd smp86xxsdk
-make run
-cd ..
+* cd smp86xxsdk
+* make run
+* cd ..
 
 # Licence
 The library and the header files are GNU LGPL.
