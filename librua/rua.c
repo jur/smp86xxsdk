@@ -30,6 +30,8 @@
 
 #define DEVICE_EM8 "/dev/em8xxx%u"
 
+#define MAX_EVENTS 32
+
 struct RUA {
 	int fd;
 	struct LLAD *pLlad;
@@ -380,6 +382,45 @@ void RUAFree(struct RUA *pRua, RMuint32 ptr)
 
 RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RMuint32 EventCount, RMuint32 TimeOut_us, RMuint32 *pEventNum)
 {
-	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
-	return RM_NOTIMPLEMENTED;
+	RMuint32 buffer[2 + MAX_EVENTS + 1];
+	RMuint32 i;
+	int rv;
+	int eventnr;
+#if 0
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+#endif
+
+	if (EventCount >= 32) {
+		fprintf("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR\n",
+		pRua, pEvents, EventCount, TimeOut_us, pEventNum);
+		return RM_ERROR;
+	}
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = TimeOut_us;
+	buffer[1] = EventCount;
+	for (i = 0; i < EventCount; i++) {
+		buffer[2 + 2 * i] = pEvents[i].ModuleID;
+		buffer[3 + 2 * i] = pEvents[i].Mask;
+	}
+	rv = ioctl(pRua->fd, 0xC10C4507, buffer);
+	if (rv < 0) {
+		fprintf("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR, ioctl failed rv = %d\n",
+		pRua, pEvents, EventCount, TimeOut_us, pEventNum, rv);
+		return RM_ERROR;
+	}
+	eventnr = buffer[2 + MAX_EVENTS];
+	if (eventnr == -1) {
+		return RM_PENDING;
+	}
+	pEvents[eventnr].Mask = buffer[3 + 2 * eventnr];
+	if (pEventNum != NULL) {
+		*pEventNum = eventnr;
+	}
+	printf("RUAWaitForMultipleEvents(%p, %p, %u, %uus, =%d) rv = RM_OK\n",
+		pRua, pEvents, EventCount, TimeOut_us, eventnr);
+#if 0
+	gettimeofday(&tv, NULL);
+#endif
+	return RM_OK;
 }
