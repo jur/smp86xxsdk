@@ -40,6 +40,16 @@
 
 #define PAGSIZE 0x1000 // TBD: SHould be dynamic
 
+/** Print debug message. */
+#if 0
+#define DPRINTF(args...) printf(args)
+#else
+#define DPRINTF(args...) do { } while(0)
+#endif
+
+/** Print error message. */
+#define EPRINTF(format, args...) fprintf(stderr, "libllad: " __FILE__ ":%d: Error: " format, __LINE__, ## args)
+
 struct LLAD {
 	int fd;
 };
@@ -69,7 +79,7 @@ struct LLAD *llad_open(const char *chipname)
 		if (pLlad->fd == -1) {
 			free(pLlad);
 			pLlad = NULL;
-			fprintf(stderr, "Error: Failed to open '%s'\n", device);
+			EPRINTF("Failed to open '%s'\n", device);
 		}
 	}
 	return pLlad;
@@ -104,11 +114,11 @@ struct GBUS *gbus_open(struct LLAD *pLlad)
 		if (rv == 0) {
 			RMuint32 i;
 
-			printf("LLAD_GET_CONFIG numberOfAreas 0x%08x\n", cfg.numberOfAreas);
-			printf("LLAD_GET_CONFIG size 0x%08x\n", cfg.size);
+			DPRINTF("LLAD_GET_CONFIG numberOfAreas 0x%08x\n", cfg.numberOfAreas);
+			DPRINTF("LLAD_GET_CONFIG size 0x%08x\n", cfg.size);
 			if (cfg.numberOfAreas > LLAD_MAX_AREAS) {
 				pGbus->numberOfAreas = LLAD_MAX_AREAS;
-				fprintf(stderr, "Maximum %d areas supported instead of %d.\n", LLAD_MAX_AREAS, pGbus->numberOfAreas);
+				EPRINTF("Maximum %d areas supported instead of %d.\n", LLAD_MAX_AREAS, pGbus->numberOfAreas);
 			} else {
 				pGbus->numberOfAreas = cfg.numberOfAreas;
 			}
@@ -120,7 +130,7 @@ struct GBUS *gbus_open(struct LLAD *pLlad)
 			if (cfg.numberOfAreas == 0) {
 				free(pGbus);
 				pGbus = NULL;
-				fprintf(stderr, "Not enough areas.\n");
+				EPRINTF("Not enough areas.\n");
 			}
 		} else {
 			free(pGbus);
@@ -230,16 +240,16 @@ RMuint8 *gbus_map_region(struct GBUS *pGbus, RMuint32 index, RMuint32 count)
 	rv = ioctl(pGbus->fd, LLAD_MAP_AREA, buffer);
 
 	if (rv != 0) {
-		fprintf(stderr, "Error: %s failed LLAD_MAP_AREA.\n", __FUNCTION__);
+		EPRINTF("%s failed LLAD_MAP_AREA.\n", __FUNCTION__);
 		perror("ioctl failed\n");
 		return NULL;
 	}
 	if (index >= pGbus->numberOfAreas) {
-		fprintf(stderr, "Error: %s index %d to large for %d.\n", __FUNCTION__, index, pGbus->numberOfAreas);
+		EPRINTF("%s index %d to large for %d.\n", __FUNCTION__, index, pGbus->numberOfAreas);
 		return NULL;
 	}
 	if (pGbus->numberOfAreas == 0) {
-		fprintf(stderr, "Error: %s number of areas are %d.\n", __FUNCTION__, pGbus->numberOfAreas);
+		EPRINTF("%s number of areas are %d.\n", __FUNCTION__, pGbus->numberOfAreas);
 		return NULL;
 	}
 
@@ -254,7 +264,7 @@ RMuint8 *gbus_map_region(struct GBUS *pGbus, RMuint32 index, RMuint32 count)
 	}
 	ptr = mmap(NULL, ((uint64_t) buffer[1]) << 12, PROT_READ | PROT_WRITE, MAP_SHARED, pGbus->fd, 0x3000000ULL | ((uint64_t) index) << 12);
 	if (ptr == MAP_FAILED) {
-		fprintf(stderr, "Error: %s map failed offset 0x%08x, size 0x%08x.\n", __FUNCTION__, buffer[1] << 12, 0x3000000 + (index << 12));
+		EPRINTF("%s map failed offset 0x%08x, size 0x%08x.\n", __FUNCTION__, buffer[1] << 12, 0x3000000 + (index << 12));
 		perror("mmap failed\n");
 		return NULL;
 	}
@@ -272,11 +282,11 @@ void gbus_unmap_region(struct GBUS *pGbus, RMuint8 *address, RMuint32 size)
 	RMuint32 i;
 
 	if (pGbus == NULL) {
-		fprintf(stderr, "Error: %s bad parameter pGbus.\n", __FUNCTION__);
+		EPRINTF("%s bad parameter pGbus.\n", __FUNCTION__);
 		return;
 	}
 	if (pGbus->fd == -1) {
-		fprintf(stderr, "Error: %s not initialized.\n", __FUNCTION__);
+		EPRINTF("%s not initialized.\n", __FUNCTION__);
 		return;
 	}
 	for (i = 0; i < pGbus->numberOfAreas; i++) {
@@ -291,7 +301,7 @@ void gbus_unmap_region(struct GBUS *pGbus, RMuint8 *address, RMuint32 size)
 			}
 		}
 	}
-	fprintf(stderr, "Error: %s no unmap for %p size %08x.\n", __FUNCTION__, address, size);
+	EPRINTF("%s no unmap for %p size %08x.\n", __FUNCTION__, address, size);
 }
 
 void gbus_close(struct GBUS *pGbus)
@@ -307,4 +317,63 @@ void gbus_close(struct GBUS *pGbus)
 		free(pGbus);
 		pGbus = NULL;
 	}
+}
+
+struct dmapool *dmapool_open(struct LLAD *h, void *area, RMuint32 buffercount, RMuint32 log2_buffersize)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return NULL;
+}
+
+void dmapool_close(struct dmapool *h)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+}
+
+RMuint32 dmapool_get_id(struct dmapool *h)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return 0;
+}
+
+RMuint8 *dmapool_get_buffer(struct dmapool *h, RMuint32 *timeout_microsecond)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return NULL;
+}
+
+RMuint32 dmapool_get_physical_address(struct dmapool *h, RMuint8 *ptr, RMuint32 size)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return 0;
+}
+
+RMstatus dmapool_release(struct dmapool *h, RMuint32 physical_address)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus dmapool_acquire(struct dmapool *h, RMuint32 physical_address)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+void dmapool_flush_cache(struct dmapool *h, RMuint32 physical_address, RMuint32 size)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+}
+
+RMuint32 dmapool_get_available_buffer_count(struct dmapool *h)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return 0;
 }
