@@ -32,10 +32,29 @@
 
 #define MAX_EVENTS 32
 
+/** Print debug message. */
+#if 0
+#define DPRINTF(args...) printf(args)
+#else
+#define DPRINTF(args...) do { } while(0)
+#endif
+
+/** Print error message. */
+#define EPRINTF(format, args...) fprintf(stderr, "librua: " __FILE__ ":%d: Error: " format, __LINE__, ## args)
+
 struct RUA {
 	int fd;
 	struct LLAD *pLlad;
 	struct GBUS *pGbus;
+};
+
+struct RUABufferPool {
+	int fd;
+	struct dmapool *pDmapool;
+	RMuint32 poolid;
+	RMuint32 moduleid;
+	RMuint32 buffersize;
+	enum RUAPoolDirection direction;
 };
 
 RMstatus RUACreateInstance(struct RUA **ppRua, RMuint32 chipnr)
@@ -59,7 +78,7 @@ RMstatus RUACreateInstance(struct RUA **ppRua, RMuint32 chipnr)
 	if (pRua->pLlad == NULL) {
 		free(pRua);
 		pRua = NULL;
-		fprintf(stderr, "Error: Failed llad_open().\n");
+		EPRINTF("Failed llad_open().\n");
 		return RM_ERROR;
 	}
 	pRua->pGbus = gbus_open(pRua->pLlad);
@@ -68,7 +87,7 @@ RMstatus RUACreateInstance(struct RUA **ppRua, RMuint32 chipnr)
 		pRua->pLlad = NULL;
 		free(pRua);
 		pRua = NULL;
-		fprintf(stderr, "Error: Failed gbus_open().\n");
+		EPRINTF("Failed gbus_open().\n");
 		return RM_ERROR;
 	}
 
@@ -81,7 +100,7 @@ RMstatus RUACreateInstance(struct RUA **ppRua, RMuint32 chipnr)
 		pRua->pLlad = NULL;
 		free(pRua);
 		pRua = NULL;
-		fprintf(stderr, "Error: Failed to open '%s'.\n", device);
+		EPRINTF("Failed to open '%s'.\n", device);
 		return RM_ERROR;
 	}
 
@@ -118,17 +137,17 @@ RMstatus RUASetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	
 	rv = ioctl(pRua->fd, 0xc01c4501, buffer);
 	if (rv < 0) {
-		fprintf(stderr, "Error: Failed ioctl in RUASetProperty(%p, %d, %d, %p, %d, %d) with rv = %d.\n",
+		EPRINTF("Failed ioctl in RUASetProperty(%p, %d, %d, %p, %d, %d) with rv = %d.\n",
 			pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		return RM_ERROR;
 	}
 	rv = buffer[6];
 	if (rv != RM_PENDING) {
 		if (rv == RM_OK) {
-			printf("RUASetProperty(%p, %d, %d, %p, %d, %d) success with rv = %d.\n",
+			DPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) success with rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		} else {
-			fprintf(stderr, "Error: Failed RUASetProperty(%p, %d, %d, %p, %d, %d) with rv = %d.\n",
+			EPRINTF("Failed RUASetProperty(%p, %d, %d, %p, %d, %d) with rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		}
 		return rv;
@@ -137,7 +156,7 @@ RMstatus RUASetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 		return rv;
 	}
 	/* The original librua also does not implement this. */
-	fprintf(stderr, "Error: Timeout not implemented in %s.\n", __FUNCTION__);
+	EPRINTF("Timeout not implemented in %s.\n", __FUNCTION__);
 	return rv;
 }
 
@@ -154,15 +173,15 @@ RMstatus RUAGetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	
 	rv = ioctl(pRua->fd, 0xc01c4502, buffer);
 	if (rv < 0) {
-		fprintf(stderr, "Error: Failed ioctl in RUAGetProperty(%p, %d, %d, %p, %d) with rv = %d.\n",
+		EPRINTF("Failed ioctl in RUAGetProperty(%p, %d, %d, %p, %d) with rv = %d.\n",
 			pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
 	} else {
 		rv = buffer[6];
 		if (rv == RM_OK) {
-			printf("RUAGetProperty(%p, %d, %d, %p, %d) success with rv = %d.\n",
+			DPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) success with rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
 		} else {
-			fprintf(stderr, "Error: Failed RUAGetProperty(%p, %d, %d, %p, %d) with rv = %d.\n",
+			EPRINTF("Failed RUAGetProperty(%p, %d, %d, %p, %d) with rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
 		}
 		return rv;
@@ -185,15 +204,15 @@ RMstatus RUAExchangeProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 	
 	rv = ioctl(pRua->fd, 0xc01c4503, buffer);
 	if (rv < 0) {
-		fprintf(stderr, "Error: Failed ioctl in RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) with rv = %d.\n",
+		EPRINTF("Failed ioctl in RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) with rv = %d.\n",
 			pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 	} else {
 		rv = buffer[6];
 		if (rv == RM_OK) {
-			printf("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) success with rv = %d.\n",
+			DPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) success with rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 		} else {
-			fprintf(stderr, "Error: Failed RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) with rv = %d.\n",
+			EPRINTF("Failed RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) with rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 		}
 		return rv;
@@ -276,7 +295,7 @@ RMuint8 *RUAMap(struct RUA *pRua, RMuint32 address, RMuint32 size)
 	}
 	p = gbus_map_region(pRua->pGbus, index, count);
 	if (p == NULL) {
-		fprintf(stderr, "Error: Failed %s for 0x%08x size 0x%08x.\n", __FUNCTION__, address, size);
+		EPRINTF("Failed %s for 0x%08x size 0x%08x.\n", __FUNCTION__, address, size);
 		return NULL;
 	}
 	return p + offset;
@@ -376,7 +395,7 @@ void RUAFree(struct RUA *pRua, RMuint32 ptr)
 	buffer[0] = ptr;
 	rv = RUASetProperty(pRua, EMHWLIB_MODULE(MM, 0), RMMMPropertyID_Free, buffer, sizeof(buffer), 0);
 	if (rv != RM_OK) {
-		fprintf(stderr, "Error: %s failed to free memory at 0x%08x.\n", __FUNCTION__, ptr);
+		EPRINTF("%s failed to free memory at 0x%08x.\n", __FUNCTION__, ptr);
 	}
 }
 
@@ -392,7 +411,7 @@ RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RM
 #endif
 
 	if (EventCount >= 32) {
-		fprintf("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR\n",
+		EPRINTF("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR\n",
 		pRua, pEvents, EventCount, TimeOut_us, pEventNum);
 		return RM_ERROR;
 	}
@@ -405,7 +424,7 @@ RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RM
 	}
 	rv = ioctl(pRua->fd, 0xC10C4507, buffer);
 	if (rv < 0) {
-		fprintf("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR, ioctl failed rv = %d\n",
+		EPRINTF("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR, ioctl failed rv = %d\n",
 		pRua, pEvents, EventCount, TimeOut_us, pEventNum, rv);
 		return RM_ERROR;
 	}
@@ -417,10 +436,198 @@ RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RM
 	if (pEventNum != NULL) {
 		*pEventNum = eventnr;
 	}
-	printf("RUAWaitForMultipleEvents(%p, %p, %u, %uus, =%d) rv = RM_OK\n",
+	DPRINTF("RUAWaitForMultipleEvents(%p, %p, %u, %uus, =%d) rv = RM_OK\n",
 		pRua, pEvents, EventCount, TimeOut_us, eventnr);
 #if 0
 	gettimeofday(&tv, NULL);
 #endif
 	return RM_OK;
+}
+
+static void release_receive_pool(struct RUABufferPool *pBufferPool)
+{
+	int ret;
+	RMuint32 iocmd[4];
+
+	do {
+		RMuint8 *buffer;
+		RMuint32 timeout_microsecond = 0;
+		RMuint32 physical_address;
+
+		buffer = dmapool_get_buffer(pBufferPool->pDmapool, &timeout_microsecond);
+		if (buffer == NULL) {
+			return;
+		}
+		physical_address = dmapool_get_physical_address(pBufferPool->pDmapool, buffer, 0);
+		iocmd[0] = pBufferPool->moduleid;
+		iocmd[1] = pBufferPool->poolid;
+		iocmd[2] = physical_address;
+		iocmd[3] = pBufferPool->buffersize;
+		ret = ioctl(pBufferPool->fd, 0x40184506, iocmd);
+	} while (ret >= 0);
+
+	dmapool_release(pBufferPool->pDmapool, iocmd[2]);
+}
+
+RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, RMuint32 log2BufferSize, enum RUAPoolDirection direction, struct RUABufferPool **ppBufferPool)
+{
+	struct RUABufferPool *pBufferPool;
+	RMuint32 modid = ModuleID | 0x80000000;
+
+	pBufferPool = malloc(sizeof(*pBufferPool));
+	if (pBufferPool == NULL) {
+		return RM_FATALOUTOFMEMORY;
+	}
+	pBufferPool->pDmapool = dmapool_open(pRua->pLlad, NULL, BufferCount, log2BufferSize);
+	if (pBufferPool->pDmapool == NULL) {
+		free(pBufferPool);
+		pBufferPool = NULL;
+		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) failed with RM_ERROR\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
+		return RM_ERROR;
+	}
+	pBufferPool->poolid = dmapool_get_id(pBufferPool->pDmapool);
+	pBufferPool->fd = pRua->fd;
+	pBufferPool->buffersize = 1 << log2BufferSize;
+	pBufferPool->direction = direction;
+	pBufferPool->moduleid = (modid & 0x7FFFFFFF);
+	if (pBufferPool->direction != RUA_POOL_DIRECTION_RECEIVE) {
+		*ppBufferPool = pBufferPool;
+		return RM_OK;
+	}
+	if (pBufferPool->moduleid == 0) {
+		dmapool_close(pBufferPool->pDmapool);
+		pBufferPool->pDmapool = NULL;
+		free(pBufferPool);
+		pBufferPool = NULL;
+		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) failed with RM_ERROR (moduleid)\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
+		return RM_ERROR;
+	}
+	release_receive_pool(pBufferPool);
+	*ppBufferPool = pBufferPool;
+	return RM_OK;
+}
+
+RMstatus RUAClosePool(struct RUABufferPool *pBufferPool)
+{
+
+	dmapool_close(pBufferPool->pDmapool);
+	free(pBufferPool);
+	pBufferPool = NULL;
+
+	return RM_OK;
+}
+
+RMstatus RUASetAddressID(struct RUA *pRua, RMuint32 address, RMuint32 ID)
+{
+	RMuint32 iocmd[2];
+	int ret;
+
+	iocmd[0] = address;
+	iocmd[1] = ID;
+	ret = ioctl(pRua->fd, 0x4008450c, iocmd);
+	if (ret < 0) {
+		EPRINTF("RUASetAddressID(%p, 0x%08x, %u) failed with RM_ERROR\n",
+			pRua, address, ID);
+		return RM_ERROR;
+	} else {
+		return RM_OK;
+	}
+}
+
+RMuint32 RUAGetAddressID(struct RUA *pRua, RMuint32 ID)
+{
+	RMuint32 iocmd[2];
+	int ret;
+
+	iocmd[0] = 0;
+	iocmd[1] = ID;
+	ret = ioctl(pRua->fd, 0x4008450d, iocmd);
+	if (ret < 0) {
+		EPRINTF("RUAGetAddressID(%p, %u) failed with ret = %d\n",
+			pRua, ID, ret);
+		return 0;
+	} else {
+		if (iocmd[0] == 0) {
+			EPRINTF("RUAGetAddressID(%p, %u) failed with 0\n",
+				pRua, ID);
+		}
+		return iocmd[0];
+	}
+#if 0
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	return RM_ERROR;
+#endif
+}
+
+RMstatus RUAGetBuffer(struct RUABufferPool *pBufferPool, RMuint8 **ppBuffer, RMuint32 TimeOut_us)
+{
+	RMuint8 *buffer;
+	
+	buffer = dmapool_get_buffer(pBufferPool->pDmapool, &TimeOut_us);
+	*ppBuffer = buffer;
+	if (buffer == NULL) {
+		return RM_PENDING;
+	} else {
+		return RM_OK;
+	}
+
+}
+
+RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *pBufferPool, RMuint8 *pData, RMuint32 DataSize, void *pInfo, RMuint32 InfoSize)
+{
+	RMuint32 physical_address;
+	RMstatus rv;
+	RMuint32 iocmd[6];
+	int ret;
+
+	physical_address = dmapool_get_physical_address(pBufferPool->pDmapool, pData, DataSize);
+	rv = dmapool_acquire(pBufferPool->pDmapool, physical_address);
+	if (rv != RM_OK) {
+		return rv;
+	}
+	dmapool_flush_cache(pBufferPool->pDmapool, physical_address, DataSize);
+	iocmd[0] = ModuleID;
+	iocmd[1] = pBufferPool->poolid;
+	iocmd[2] = physical_address;
+	iocmd[3] = DataSize;
+	iocmd[4] = (RMuint32) pInfo;
+	iocmd[5] = InfoSize;
+	ret = ioctl(pRua->fd, 0x40184504, iocmd);
+	if (ret >= 0) {
+		return RM_OK;
+	}
+	rv = dmapool_release(pBufferPool->pDmapool, iocmd[2]);
+	if (rv == RM_OK) {
+		return RM_PENDING;
+	}
+	return rv;
+}
+
+RMstatus RUAReleaseBuffer(struct RUABufferPool *pBufferPool, RMuint8 *pBuffer)
+{
+	RMuint32 physical_address;
+	RMstatus rv;
+
+	physical_address = dmapool_get_physical_address(pBufferPool->pDmapool, pBuffer, 0);
+	if (physical_address == 0) {
+		return RM_ERROR;
+	}
+	rv = dmapool_release(pBufferPool->pDmapool, physical_address);
+	if (rv == RM_OK) {
+		return RM_OK;
+	}
+	if (pBufferPool->direction != RUA_POOL_DIRECTION_RECEIVE) {
+		return rv;
+	}
+	release_receive_pool(pBufferPool);
+	return RM_OK;
+}
+
+RMuint32 RUAGetAvailableBufferCount(struct RUABufferPool *pBufferPool)
+{
+	RMuint32 rv;
+	
+	rv = dmapool_get_available_buffer_count(pBufferPool->pDmapool);
+
+	return rv;
 }

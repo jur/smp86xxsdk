@@ -24,6 +24,7 @@
 #define EMHWLIB_MODULE(category, index) ((category & 0xFF) | ((index << 8) & 0xFF00))
 
 struct RUA;
+struct RUABufferPool;
 
 struct RUAEvent {                                                               
 	RMuint32 ModuleID;
@@ -34,6 +35,11 @@ enum RUADramType {
 	RUA_DRAM_UNPROTECTED = 57,
 	RUA_DRAM_ZONEA,
 	RUA_DRAM_ZONEB
+};
+
+enum RUAPoolDirection {
+	RUA_POOL_DIRECTION_SEND = 54,
+	RUA_POOL_DIRECTION_RECEIVE = 55,
 };
 
 void *RMMalloc(RMuint32 size);
@@ -55,6 +61,14 @@ void RUAUnMap(struct RUA *pRua, RMuint8 *ptr, RMuint32 size);
 RMuint32 RUAMalloc(struct RUA *pRua, RMuint32 dramIndex, enum RUADramType dramtype, RMuint32 size);
 void RUAFree(struct RUA *pRua, RMuint32 ptr);
 RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RMuint32 EventCount, RMuint32 TimeOut_us, RMuint32 *pEventNum);
+RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, RMuint32 log2BufferSize, enum RUAPoolDirection direction, struct RUABufferPool **ppBufferPool);
+RMstatus RUAClosePool(struct RUABufferPool *pBufferPool);
+RMstatus RUASetAddressID(struct RUA *pRua, RMuint32 address, RMuint32 ID);
+RMuint32 RUAGetAddressID(struct RUA *pRua, RMuint32 ID);
+RMstatus RUAGetBuffer(struct RUABufferPool *pBufferPool, RMuint8 **ppBuffer, RMuint32 TimeOut_us);
+RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *pBufferPool, RMuint8 *pData, RMuint32 DataSize, void *pInfo, RMuint32 InfoSize);
+RMstatus RUAReleaseBuffer(struct RUABufferPool *pBufferPool, RMuint8 *pBuffer);
+RMuint32 RUAGetAvailableBufferCount(struct RUABufferPool *pBufferPool);
 
 extern int verbose_stderr;
  
