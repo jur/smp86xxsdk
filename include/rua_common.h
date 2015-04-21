@@ -234,6 +234,7 @@ typedef enum {
  * The names are the same as the exported symbols of em8xxx.ko
  */
 typedef enum {
+	Enumerator = 1,
 	SystemBlock = 2,
 	DisplayBlock = 3,
 	DispOSDScaler = 4,
@@ -264,6 +265,7 @@ typedef enum {
 	SpuDecoder = 34,
 	ClosedCaptionDecoder = 35,
 	StreamCapture = 36,
+	STC = 42,
 } RMcategoryID;
 
 #endif

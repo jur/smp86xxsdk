@@ -4,7 +4,7 @@
 #
 
 # Name of test to run:
-TESTPRG = smptest
+TESTPRG = playmp4
 
 # Install prefix:
 PREFIX ?= /usr/local

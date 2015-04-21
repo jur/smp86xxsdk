@@ -22,6 +22,7 @@
 #include <zyxel_dma2500.h>
 
 #define EMHWLIB_MODULE(category, index) ((category & 0xFF) | ((index << 8) & 0xFF00))
+#define EMHWLIB_TARGET_MODULE(category, index, target) ((category & 0xFF) | ((index << 8) & 0xFF00) | ((target << 16) & 0xFFFF0000))
 
 struct RUA;
 struct RUABufferPool;

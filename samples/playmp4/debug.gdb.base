@@ -1,0 +1,10 @@
+set solib-search-path $DMABASE/upgrade/lib:$PREFIX/lib
+target remote $CLIENTIP:1234
+
+set pagination off
+break main
+cont
+clear main
+
+
+display/i $pc

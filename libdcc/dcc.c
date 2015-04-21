@@ -28,6 +28,16 @@
 #include "rua.h"
 #include "dcc.h"
 
+/** Print debug message. */
+#if 0
+#define DPRINTF(args...) printf(args)
+#else
+#define DPRINTF(args...) do { } while(0)
+#endif
+
+/** Print error message. */
+#define EPRINTF(format, args...) fprintf(stderr, "librua: " __FILE__ ":%d: Error: " format, __LINE__, ## args)
+
 struct DCC {
 	struct RUA *pRua;
 	RMuint32 video_ucode_address;
@@ -54,12 +64,22 @@ struct DCCVideoSource {
 	RMuint32 mixer;
 	RMuint32 scaler;
 	RMuint32 addr;
+	RMuint32 picture_count;
 	pic_info_t *pic_info;
+};
+
+struct DCCSTCSource {
+	struct RUA *pRua;
+	RMuint32 StcModuleId;
 };
 
 RMstatus DCCOpen(struct RUA *pRua, struct DCC **ppDCC)
 {
 	struct DCC *pDCC = NULL;
+
+	if (pRua == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
 
 	pDCC = malloc(sizeof(*pDCC));
 	if (pDCC == NULL) {
@@ -75,6 +95,9 @@ RMstatus DCCOpen(struct RUA *pRua, struct DCC **ppDCC)
 
 RMstatus DCCClose(struct DCC *pDCC)
 {
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
 	free(pDCC);
 	pDCC = NULL;
 
@@ -85,7 +108,15 @@ RMstatus DCCInitMicroCodeEx(struct DCC *pDCC, enum DCCInitMode init_mode)
 {
 	RMbool enabled;
 	int rv;
-	struct RUA *pRua = pDCC->pRua;
+	struct RUA *pRua;
+
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+	pRua = pDCC->pRua;
 
 	do {
 		rv = RUASetProperty(pRua, EMHWLIB_MODULE(DemuxEngine, 0), RMDemuxEnginePropertyID_TimerInit, NULL, 0, 0);
@@ -189,6 +220,10 @@ static RMstatus set_property(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 	RMstatus rv;
 	int n = 0;
 
+	if (pRua == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+
 	do {
 		struct RUAEvent evt;
 
@@ -222,6 +257,13 @@ static RMstatus set_property(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 RMstatus DCCSetSurfaceSource(struct DCC *pDCC, RMuint32 surfaceID, struct DCCVideoSource *pVideoSource)
 {
 	RMuint32 surface;
+
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
 
 	if (pVideoSource == NULL) {
 		surface = 0;
@@ -266,11 +308,18 @@ RMstatus DCCSetSurfaceSource(struct DCC *pDCC, RMuint32 surfaceID, struct DCCVid
 
 RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDProfile *profile, RMuint32 picture_count, struct DCCVideoSource **ppVideoSource, struct DCCSTCSource *pStcSource)
 {
-	struct DCCVideoSource *pVideoSource = NULL;
+	struct DCCVideoSource *pVideoSource;
 	RMstatus rv;
 	RMuint32 surface_size;
 	RMuint32 addr;
 	RMuint32 i;
+
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
 
 	pVideoSource = malloc(sizeof(*pVideoSource));
 	if (pVideoSource == NULL) {
@@ -293,7 +342,7 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 	}
 	memset(pVideoSource->pic_info, 0, sizeof(*pVideoSource->pic_info) * picture_count);
 
-	rv = RUAExchangeProperty(pDCC->pRua, DisplayBlock, RMDisplayBlockPropertyID_MultiplePictureSurfaceSize, &picture_count, sizeof(picture_count), &surface_size, sizeof(surface_size));
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_MultiplePictureSurfaceSize, &picture_count, sizeof(picture_count), &surface_size, sizeof(surface_size));
 	if (rv != RM_OK) {
 		fprintf(stderr, "Error: Failed to set multiple picture surface.\n");
 		return rv;
@@ -310,7 +359,7 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 	pic_in[3] = profile->Width;
 	pic_in[4] = profile->Height;
 
-	rv = RUAExchangeProperty(pDCC->pRua, DisplayBlock, RMDisplayBlockPropertyID_PictureSize, &pic_in, sizeof(pic_in), &pic_out, sizeof(pic_out));
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_PictureSize, &pic_in, sizeof(pic_in), &pic_out, sizeof(pic_out));
 	if (rv != RM_OK) {
 		fprintf(stderr, "Error: Failed to set picture format.\n");
 		return rv;
@@ -322,6 +371,7 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 		return RM_FATALOUTOFMEMORY;
 	}
 	pVideoSource->addr = addr;
+	pVideoSource->picture_count = picture_count;
 
 	RMuint32 surface_cfg[9];
 
@@ -333,9 +383,13 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 	surface_cfg[5] = profile->PixelAspectRatio.X;
 	surface_cfg[6] = profile->PixelAspectRatio.Y;
 	surface_cfg[7] = picture_count;
-	surface_cfg[8] = 0; // TBD: Get from parameter pStcSource
+	surface_cfg[8] = 0;
 
-	rv = RUASetProperty(pDCC->pRua, DisplayBlock, RMDisplayBlockPropertyID_InitMultiplePictureSurface, &surface_cfg, sizeof(surface_cfg), 0);
+	if (pStcSource != NULL) {
+		DCCSTCGetModuleId(pStcSource, &surface_cfg[8]);
+	}
+
+	rv = RUASetProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_InitMultiplePictureSurface, &surface_cfg, sizeof(surface_cfg), 0);
 	if (rv != RM_OK) {
 		RUAFree(pDCC->pRua, pVideoSource->addr);
 		pVideoSource->addr = 0;
@@ -361,7 +415,7 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 		frameIn[2] = addr;
 
 		memset(frameOut, 0, sizeof(frameOut));
-		rv = RUAExchangeProperty(pDCC->pRua, DisplayBlock, RMDisplayBlockPropertyID_InitPictureX, frameIn, sizeof(frameIn), frameOut, sizeof(frameOut));
+		rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_InitPictureX, frameIn, sizeof(frameIn), frameOut, sizeof(frameOut));
 
 		pic->PictureAddr = addr;
 		pic->LumaAddress = frameOut[0];
@@ -380,7 +434,7 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 	enable[0] = pVideoSource->addr;
 	enable[1] = TRUE;
 
-	rv = RUASetProperty(pDCC->pRua, DisplayBlock, RMDisplayBlockPropertyID_EnableGFXInteraction, enable, sizeof(enable), 0);
+	rv = RUASetProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_EnableGFXInteraction, enable, sizeof(enable), 0);
 	if (rv != RM_OK) {
 		fprintf(stderr, "Error: Failed to enable surface.\n");
 		RUAFree(pDCC->pRua, pVideoSource->addr);
@@ -393,6 +447,13 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 
 RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSource, struct DCCOSDProfile *profile, RMuint32 *SurfaceAddr, RMuint32 *SurfaceSize)
 {
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
 	if (profile != NULL) {
 		RMstatus rv;
 		RMuint32 pic_in[5];
@@ -409,7 +470,7 @@ RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSou
 		pic_in[3] = profile->Width;
 		pic_in[4] = profile->Height;
 
-		rv = RUAExchangeProperty(pDCC->pRua, DisplayBlock, RMDisplayBlockPropertyID_SurfaceSize, &pic_in, sizeof(pic_in), &pic_out, sizeof(pic_out));
+		rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_SurfaceSize, &pic_in, sizeof(pic_in), &pic_out, sizeof(pic_out));
 		if (rv != RM_OK) {
 			fprintf(stderr, "Error: Failed to set picture format.\n");
 			return rv;
@@ -422,7 +483,16 @@ RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSou
 
 RMstatus DCCGetOSDPictureInfo(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint32 *PictureAddr,  RMuint32 *LumaAddr, RMuint32 *LumaSize, RMuint32 *ChromaAddr, RMuint32 *ChromaSize)
 {
-	// TBD: Verify index against picture count.
+	if (pVideoSource == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pVideoSource->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+	if (index >= pVideoSource->picture_count) {
+		return RM_ERROR;
+	}
+
 	if (PictureAddr != NULL) {
 		*PictureAddr = pVideoSource->pic_info[index].PictureAddr;
 	}
@@ -443,6 +513,13 @@ RMstatus DCCGetOSDPictureInfo(struct DCCVideoSource *pVideoSource, RMuint32 inde
 
 RMstatus DCCGetScalerModuleID(struct DCC *pDCC, enum DCCRoute route, enum DCCSurface surface, RMuint32 index, RMuint32 *scaler)
 {
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
 	switch (route) {
 		case DCCRoute_Main:
 			switch(surface) {
@@ -526,6 +603,13 @@ RMstatus DCCClearOSDPicture(struct DCCVideoSource *pVideoSource, RMuint32 index)
 	RMuint32 ChromaAddr;
 	RMuint32 ChromaSize;
 
+	if (pVideoSource == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pVideoSource->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
 	rv = DCCGetOSDPictureInfo(pVideoSource, index, NULL,  &LumaAddr, &LumaSize, &ChromaAddr, &ChromaSize);
 	if (rv != RM_OK) {
 		return rv;
@@ -549,6 +633,13 @@ RMstatus DCCInsertPictureInMultiplePictureOSDVideoSource(struct DCCVideoSource *
 	RMuint32 buffer[4];
 	RMstatus rv;
 
+	if (pVideoSource == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pVideoSource->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
 	memset(buffer, 0, sizeof(buffer));
 	buffer[0] = pVideoSource->addr;
 	buffer[1] = pVideoSource->pic_info[index].PictureAddr;
@@ -566,6 +657,13 @@ RMstatus DCCEnableVideoSource(struct DCCVideoSource *pVideoSource, RMbool enable
 	RMuint32 state;
 	RMuint32 mixer;
 
+	if (pVideoSource == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pVideoSource->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
 	if (pVideoSource->mixer == 0) {
 		fprintf(stderr, "Error: %s no mixer defined.\n", __FUNCTION__);
 		return RM_ERROR;
@@ -580,13 +678,12 @@ RMstatus DCCEnableVideoSource(struct DCCVideoSource *pVideoSource, RMbool enable
 		fprintf(stderr, "Error: %s getting index failed.\n", __FUNCTION__);
 		return rv;
 	}
-	mixer = pVideoSource->mixer & 0xFF;
-	mixer |= idx << 16;
 	if (enable) {
 		state = 2;
 	} else {
 		state = 1;
 	}
+	mixer = EMHWLIB_TARGET_MODULE(pVideoSource->mixer, 0, idx);
 	rv = set_property(pVideoSource->pRua, mixer, RMGenericPropertyID_MixerSourceState, &state, sizeof(state));
 	if (rv != RM_OK) {
 		return rv;
@@ -596,6 +693,153 @@ RMstatus DCCEnableVideoSource(struct DCCVideoSource *pVideoSource, RMbool enable
 		return rv;
 	}
 	return RM_OK;
+}
+
+RMstatus DCCSetMemoryManager(struct DCC *pDCC, RMuint8 dram)
+{
+	RMstatus rv;
+	struct RUA *pRua;
+	RMuint32 buffer[1];
+	RMuint32 result[1];
+	
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+	pRua = pDCC->pRua;
+
+	memset(buffer, 0, sizeof(buffer));
+	memset(result, 0, sizeof(result));
+	buffer[0] = MM;
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(Enumerator, 0), RMEnumeratorPropertyID_CategoryIDToNumberOfInstances, buffer, sizeof(buffer), &result, sizeof(result));
+	if (rv != RM_OK) {
+		return RM_ERROR;
+	}
+	if (dram >= result[0]) {
+		return RM_ERROR;
+	}
+	pDCC->dram = dram;
+	return RM_OK;
+
+}
+
+RMstatus DCCSTCOpen(struct DCC *pDCC, struct DCCStcProfile *stc_profile, struct DCCSTCSource **ppStcSource)
+{
+	RMstatus rv;
+	RMuint32 buffer[9];
+	struct DCCSTCSource *pStcSource;
+	
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
+	pStcSource = malloc(sizeof(*pStcSource));
+
+	pStcSource->pRua = pDCC->pRua;
+	pStcSource->StcModuleId = EMHWLIB_MODULE(STC, stc_profile->STCID);
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = stc_profile->master;
+	buffer[1] = stc_profile->stc_timer_id;
+	buffer[2] = stc_profile->stc_time_resolution;
+	buffer[3] = stc_profile->video_timer_id;
+	buffer[4] = stc_profile->video_time_resolution;
+	buffer[5] = stc_profile->video_offset;
+	buffer[6] = stc_profile->audio_timer_id;
+	buffer[7] = stc_profile->audio_time_resolution;
+	buffer[8] = stc_profile->audio_offset;
+
+	rv = RUASetProperty(pDCC->pRua, pStcSource->StcModuleId, RMSTCPropertyID_Open, buffer, sizeof(buffer), 0);
+	if (rv != RM_OK) {
+		free(pStcSource);
+		pStcSource = NULL;
+		*ppStcSource = NULL;
+		return rv;
+	}
+	*ppStcSource = pStcSource;
+	return RM_OK;
+}
+
+RMstatus DCCSTCClose(struct DCCSTCSource *pStcSource)
+{
+	RMstatus rv;
+	RMuint32 buffer[9];
+	
+	if (pStcSource == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pStcSource->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = 0;
+
+	rv = RUASetProperty(pStcSource->pRua, pStcSource->StcModuleId, RMSTCPropertyID_Close, buffer, sizeof(buffer), 0);
+
+	free(pStcSource);
+	pStcSource = NULL;
+
+	return rv;
+}
+
+RMstatus DCCSTCGetModuleId(struct DCCSTCSource *pStcSource, RMuint32 *stc_id)
+{
+	*stc_id = pStcSource->StcModuleId;
+
+	return RM_OK;
+}
+
+RMstatus DCCXOpenVideoDecoderSource(struct DCC *pDCC, struct DCCXVideoProfile *dcc_profile, struct DCCVideoSource **ppVideoSource)
+{
+	struct DCCVideoSource *pVideoSource;
+	RMuint32 buffer[1];
+	RMuint32 result[1];
+	RMstatus rv;
+
+	if (pDCC == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
+	if (pDCC->pRua == NULL) {
+		return RM_INVALIDMODE;
+	}
+
+	pVideoSource = malloc(sizeof(*pVideoSource));
+	if (pVideoSource == NULL) {
+		fprintf(stderr, "Error: out of memory\n");
+
+		return RM_FATALOUTOFMEMORY;
+	}
+	memset(pVideoSource, 0, sizeof(*pVideoSource));
+	pVideoSource->pRua = pDCC->pRua;
+	pVideoSource->pDCC = pDCC;
+
+	memset(buffer, 0, sizeof(buffer));
+	memset(result, 0, sizeof(result));
+	buffer[0] = MpegEngine;
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(Enumerator, 0), RMEnumeratorPropertyID_CategoryIDToNumberOfInstances, buffer, sizeof(buffer), &result, sizeof(result));
+	if (rv != RM_OK) {
+		return RM_ERROR;
+	}
+	if (dcc_profile->MpegEngineID >= result[0]) {
+		return RM_PARAMETER_OUT_OF_RANGE;
+	}
+
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCCloseVideoSource(struct DCCVideoSource *pVideoSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
 }
 
 void dontremovefunction(void)

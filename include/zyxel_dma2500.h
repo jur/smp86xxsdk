@@ -60,6 +60,8 @@ typedef enum {
 	RMVideoDecoderPropertyID_Codec = 4107,
 	RMVideoDecoderPropertyID_Command = 4108,
 	RMVideoDecoderPropertyID_State = 4109,
+	RMVideoDecoderPropertyID_DecoderDataMemory = 4133,
+	RMVideoDecoderPropertyID_DRAMSizeX = 4134,
 	RMVideoDecoderPropertyID_CodecX = 4136,
 	RMVideoDecoderPropertyID_BtsFIFO = 4137,
 	RMVideoDecoderPropertyID_CommandStatus = 4140,

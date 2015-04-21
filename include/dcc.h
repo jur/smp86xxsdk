@@ -63,6 +63,67 @@ struct DCCOSDProfile {
 	struct EMhwlibAspectRatio PixelAspectRatio;
 };
 
+enum Master_type {
+	Master_STC = 0,
+	Master_Audio = 1,
+};
+
+struct DCCStcProfile {
+	RMuint32 STCID;
+	enum Master_type master;
+	RMuint32 stc_timer_id;
+	RMuint32 stc_time_resolution;
+	RMuint32 video_timer_id;
+	RMuint32 video_time_resolution;
+	RMint32 video_offset;
+	RMuint32 audio_timer_id;
+	RMuint32 audio_time_resolution;
+	RMint32 audio_offset;
+};
+
+enum EMhwlibVideoCodec {
+	EMhwlibVideoCodec_MPEG2 = 1,
+	EMhwlibVideoCodec_MPEG4 = 2,
+	EMhwlibVideoCodec_MPEG4_Padding = 3,
+	EMhwlibVideoCodec_DIVX3 = 4,
+	EMhwlibVideoCodec_VC1 = 5,
+	EMhwlibVideoCodec_WMV = 6,
+	EMhwlibVideoCodec_H264 = 7,
+	EMhwlibJPEGCodec = 8,
+	EMhwlibDVDSpuCodec = 9,
+	EMhwlibBDRLECodec = 10,
+};
+
+struct DCCXVideoProfile {
+	RMuint32 MpegEngineID;
+	RMuint32 STCID;
+	RMuint32 XtaskID;
+	RMuint32 XtaskInbandFIFOCount;
+	RMuint32 VideoDecoderID;
+	RMuint32 ProtectedFlags;
+	RMuint32 BitstreamFIFOSize;
+	RMuint32 XferFIFOCount;
+	RMuint32 PtsFIFOCount;
+	RMuint32 InbandFIFOCount;
+	enum EMhwlibVideoCodec Codec;
+	RMuint32 Profile;
+	RMuint32 Level;
+	RMuint32 ExtraPictureBufferCount;
+	RMuint32 MaxWidth;
+	RMuint32 MaxHeight;
+	RMuint32 SPUProtectedFlags;
+	RMuint32 SPUBitstreamFIFOSize;
+	RMuint32 SPUXferFIFOCount;
+	RMuint32 SPUPtsFIFOCount;
+	RMuint32 SPUInbandFIFOCount;
+	enum EMhwlibVideoCodec SPUCodec;
+	RMuint32 SPUProfile;
+	RMuint32 SPULevel;
+	RMuint32 SPUExtraPictureBufferCount;
+	RMuint32 SPUMaxWidth;
+	RMuint32 SPUMaxHeight;
+};
+
 RMstatus DCCOpen(struct RUA *pRUA, struct DCC **ppDCC);
 RMstatus DCCClose(struct DCC *pDCC);
 RMstatus DCCInitMicroCodeEx(struct DCC *pDCC, enum DCCInitMode init_mode);
@@ -74,5 +135,11 @@ RMstatus DCCGetScalerModuleID(struct DCC *pDCC, enum DCCRoute route, enum DCCSur
 RMstatus DCCClearOSDPicture(struct DCCVideoSource *pVideoSource, RMuint32 index);
 RMstatus DCCInsertPictureInMultiplePictureOSDVideoSource(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint64 Pts);
 RMstatus DCCEnableVideoSource(struct DCCVideoSource *pVideoSource, RMbool enable);
+RMstatus DCCSetMemoryManager(struct DCC *pDCC, RMuint8 dram);
+RMstatus DCCSTCOpen(struct DCC *pDCC, struct DCCStcProfile *stc_profile, struct DCCSTCSource **ppStcSource);
+RMstatus DCCSTCClose(struct DCCSTCSource *pStcSource);
+RMstatus DCCSTCGetModuleId(struct DCCSTCSource *pStcSource, RMuint32 *stc_id);
+RMstatus DCCXOpenVideoDecoderSource(struct DCC *pDCC, struct DCCXVideoProfile *dcc_profile, struct DCCVideoSource **ppVideoSource);
+RMstatus DCCCloseVideoSource(struct DCCVideoSource *pVideoSource);
 
 #endif
