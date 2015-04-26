@@ -11,7 +11,7 @@ compatible to examples which I found.
 # Status
 It is possible to use OSD (On Screen Display). Video and sound is not yet
 supported in the libraries. But when you use the local libraries from the
-DMA 2500. It is possible to play video and audio.
+DMA-2500, it is possible to play video and audio streams from a mp4 file.
 
 # Toolchain
 You need a toolchain for building it, e.g.:
@@ -33,15 +33,22 @@ a video for testing and convert it to the raw video and audio data.
 
 # Test Setup
 The test is configured in config.mk.
+
+You can configure CLIENTIP and SERVERIP in this file. The default is that it
+tries to auto-detect the IP of the server (the host computer where you run
+make). It assumes that dma-2500 will be resolved by a name server to the ip
+address of the Zyxel DMA-2500.
+
 The OSD test works with the following configuration:
-TESTPRG = smptest
-USELOCALLIBS = no
+* TESTPRG = smptest
+* USELOCALLIBS = no
+
 The video playback test needs the following configuration (default):
-TESTPRG = playrawmp4
-USELOCALLIBS = yes
+* TESTPRG = playrawmp4
+* USELOCALLIBS = yes
 
 As there is no full support for video and audio in the libaries, you need to
-use the libraries which are installed on the DMA 2500.
+use the libraries which are installed on the DMA-2500.
 
 # Run Test
 You need first to boot the Zyxel DMA-2500 and connect it to the network. The
@@ -58,13 +65,13 @@ To run the test you need first to source the DMATOOLCHAIN.sh from the toolchain.
 For testing video playback, you need to connect a USB storage device. The test
 will download a youtube video on the host and extracts the raw video and audio
 data. These will be copied ot the local web server /var/www and dowanloaded from
-the DMA 2500 to /usb/usb0/video. It can be tested with:
+the DMA-2500 to /usb/usb0/video. It can be tested with:
 * cd smp86xxsdk
 * make TESTPRG=playrawmp4 USELOCALLIBS=yes YOUTUBEID=HXOaeE6IMWA run
 * cd ..
 
 The sound is sometime not working. To ensure that will work you should play a
-mp4 file in the DMA 2500 using the offical software before running the test.
+mp4 file in the DMA-2500 using the offical software before running the test.
 
 # Licence
 The library and the header files are GNU LGPL.
