@@ -30,6 +30,7 @@
 
 struct DCC;
 struct DCCVideoSource;
+struct DCCAudioSource;
 
 enum DCCRoute {
 	DCCRoute_Main = 0,
@@ -122,24 +123,127 @@ struct DCCXVideoProfile {
 	RMuint32 SPUExtraPictureBufferCount;
 	RMuint32 SPUMaxWidth;
 	RMuint32 SPUMaxHeight;
+	RMuint32 reserved1;
+};
+
+struct DCCAudioProfile {
+	RMuint32 BitstreamFIFOSize;
+	RMuint32 XferFIFOCount;
+	RMuint32 DemuxProgramID;
+	RMuint32 AudioEngineID;
+	RMuint32 AudioDecoderID;
+	RMuint32 STCID;
+};
+
+enum AACInputFormat {
+	ADIF_header = 0,
+	ADTS_header = 1,
+	DSI_header = 2
+};
+
+enum OutputSpdif_type {
+	OutputSpdif_Disable = 0,
+	OutputSpdif_Compressed = 1,
+	OutputSpdif_Uncompressed = 3,
+	OutputSpdif_NoDecodeCompressed = 5,
+};
+
+enum OutputDualMode_type {
+	DualMode_Stereo = 0,
+	DualMode_LeftMono = 1,
+	DualMode_RightMono = 2,
+	DualMode_MixMono = 3,
+};
+
+enum AacOutputChannels_type {
+	Aac_C = 1,
+	Aac_LR = 2,
+	Aac_LCR = 3,
+	Aac_LRS = 18,
+	Aac_LCRS = 19,
+	Aac_LRLsRs = 34,
+	Aac_LCRLsRs = 35,
+};
+
+enum AudioOutputSurround20_type {
+	SurroundAsStream = 0,
+	SurroundDisable = 4,
+	SurroundEnable = 5,
+};
+
+struct AudioDecoder_AACParameters_type {
+	enum AACInputFormat InputFormat;
+	enum OutputSpdif_type OutputSpdif;
+	enum OutputDualMode_type OutputDualMode;
+	enum AacOutputChannels_type OutputChannels;
+	RMbool Acmod2DualMode;
+	RMbool OutputLfe;
+	enum AudioOutputSurround20_type OutputSurround20;
+	RMuint32 BassMode;
+};
+
+enum DCCStreamType {
+	DCC_Stc = 0,
+	DCC_Video = 1,
+	DCC_Audio = 2,
+};
+
+struct emhwlib_info {
+	RMuint32 ValidFields;
+	RMuint64 TimeStamp;
+	RMuint32 FirstAccessUnitPointer;
+};
+
+enum DCCVideoPlayCommand {
+	DCCVideoPlayFwd = 3,
+	DCCVideoPlayIFrame = 5,
+	DCCVideoPlayNextFrame = 6,
+};
+
+enum DCCStopMode {
+	DCCStopMode_BlackFrame = 0,
+	DCCStopMode_LastFrame = 1,
 };
 
 RMstatus DCCOpen(struct RUA *pRUA, struct DCC **ppDCC);
 RMstatus DCCClose(struct DCC *pDCC);
 RMstatus DCCInitMicroCodeEx(struct DCC *pDCC, enum DCCInitMode init_mode);
 RMstatus DCCSetSurfaceSource(struct DCC *pDCC, RMuint32 surfaceID, struct DCCVideoSource *pVideoSource);
+RMstatus DCCGetScalerModuleID(struct DCC *pDCC, enum DCCRoute route, enum DCCSurface surface, RMuint32 index, RMuint32 *scaler);
+
 RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDProfile *profile, RMuint32 picture_count, struct DCCVideoSource **ppVideoSource, struct DCCSTCSource *pStcSource);
 RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSource, struct DCCOSDProfile *profile, RMuint32 *SurfaceAddr, RMuint32 *SurfaceSize);
 RMstatus DCCGetOSDPictureInfo(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint32 *PictureAddr,  RMuint32 *LumaAddr, RMuint32 *LumaSize, RMuint32 *ChromaAddr, RMuint32 *ChromaSize);
-RMstatus DCCGetScalerModuleID(struct DCC *pDCC, enum DCCRoute route, enum DCCSurface surface, RMuint32 index, RMuint32 *scaler);
 RMstatus DCCClearOSDPicture(struct DCCVideoSource *pVideoSource, RMuint32 index);
 RMstatus DCCInsertPictureInMultiplePictureOSDVideoSource(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint64 Pts);
 RMstatus DCCEnableVideoSource(struct DCCVideoSource *pVideoSource, RMbool enable);
 RMstatus DCCSetMemoryManager(struct DCC *pDCC, RMuint8 dram);
+
 RMstatus DCCSTCOpen(struct DCC *pDCC, struct DCCStcProfile *stc_profile, struct DCCSTCSource **ppStcSource);
 RMstatus DCCSTCClose(struct DCCSTCSource *pStcSource);
 RMstatus DCCSTCGetModuleId(struct DCCSTCSource *pStcSource, RMuint32 *stc_id);
+RMstatus DCCSTCSetTimeResolution(struct DCCSTCSource *pStcSource, enum DCCStreamType type, RMuint32 time_resolution);
+RMstatus DCCSTCSetVideoOffset(struct DCCSTCSource *pStcSource, RMint32 time, RMuint32 time_resolution);
+RMstatus DCCSTCSetAudioOffset(struct DCCSTCSource *pStcSource, RMint32 time, RMuint32 time_resolution);
+RMstatus DCCSTCSetTime(struct DCCSTCSource *pStcSource, RMuint64 time, RMuint32 time_resolution);
+RMstatus DCCSTCSetSpeed(struct DCCSTCSource *pStcSource, RMint32 numerator, RMuint32 denominator);
+RMstatus DCCSTCGetTime(struct DCCSTCSource *pStcSource, RMuint64 *ptime, RMuint32 time_resolution);
+RMstatus DCCSTCPlay(struct DCCSTCSource *pStcSource);
+RMstatus DCCSTCStop(struct DCCSTCSource *pStcSource);
+
 RMstatus DCCXOpenVideoDecoderSource(struct DCC *pDCC, struct DCCXVideoProfile *dcc_profile, struct DCCVideoSource **ppVideoSource);
 RMstatus DCCCloseVideoSource(struct DCCVideoSource *pVideoSource);
+RMstatus DCCXSetVideoDecoderSourceCodec(struct DCCVideoSource *pVideoSource, enum EMhwlibVideoCodec Codec);
+RMstatus DCCGetVideoDecoderSourceInfo(struct DCCVideoSource *pVideoSource, RMuint32 *video_decoder, RMuint32 *spu_decoder, RMuint32 *timer);
+RMstatus DCCPlayVideoSource(struct DCCVideoSource *pVideoSource, enum DCCVideoPlayCommand cmd);
+RMstatus DCCStopVideoSource(struct DCCVideoSource *pVideoSource, enum DCCStopMode stop_mode);
+
+RMstatus DCCOpenAudioDecoderSource(struct DCC *pDCC, struct DCCAudioProfile *dcc_profile, struct DCCAudioSource **ppAudioSource);
+RMstatus DCCCloseAudioSource(struct DCCAudioSource *pAudioSource);
+RMstatus DCCGetAudioDecoderSourceInfo(struct DCCAudioSource *pAudioSource, RMuint32 *decoder, RMuint32 *engine, RMuint32 *timer);
+RMstatus DCCSetAudioAACFormat(struct DCCAudioSource *pAudioSource, struct AudioDecoder_AACParameters_type *pFormat);
+RMstatus DCCSetAudioSourceVolume(struct DCCAudioSource *pAudioSource, RMuint32 volume);
+RMstatus DCCPlayAudioSource(struct DCCAudioSource *pAudioSource);
+RMstatus DCCStopAudioSource(struct DCCAudioSource *pAudioSource);
 
 #endif

@@ -795,6 +795,62 @@ RMstatus DCCSTCGetModuleId(struct DCCSTCSource *pStcSource, RMuint32 *stc_id)
 	return RM_OK;
 }
 
+RMstatus DCCSTCSetTimeResolution(struct DCCSTCSource *pStcSource, enum DCCStreamType type, RMuint32 time_resolution)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCSetVideoOffset(struct DCCSTCSource *pStcSource, RMint32 time, RMuint32 time_resolution)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCSetAudioOffset(struct DCCSTCSource *pStcSource, RMint32 time, RMuint32 time_resolution)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCSetTime(struct DCCSTCSource *pStcSource, RMuint64 time, RMuint32 time_resolution)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCSetSpeed(struct DCCSTCSource *pStcSource, RMint32 numerator, RMuint32 denominator)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCGetTime(struct DCCSTCSource *pStcSource, RMuint64 *ptime, RMuint32 time_resolution)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCPlay(struct DCCSTCSource *pStcSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSTCStop(struct DCCSTCSource *pStcSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
 RMstatus DCCXOpenVideoDecoderSource(struct DCC *pDCC, struct DCCXVideoProfile *dcc_profile, struct DCCVideoSource **ppVideoSource)
 {
 	struct DCCVideoSource *pVideoSource;
@@ -836,6 +892,83 @@ RMstatus DCCXOpenVideoDecoderSource(struct DCC *pDCC, struct DCCXVideoProfile *d
 }
 
 RMstatus DCCCloseVideoSource(struct DCCVideoSource *pVideoSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCXSetVideoDecoderSourceCodec(struct DCCVideoSource *pVideoSource, enum EMhwlibVideoCodec Codec)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCGetVideoDecoderSourceInfo(struct DCCVideoSource *pVideoSource, RMuint32 *video_decoder, RMuint32 *spu_decoder, RMuint32 *timer)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCPlayVideoSource(struct DCCVideoSource *pVideoSource, enum DCCVideoPlayCommand cmd)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCStopVideoSource(struct DCCVideoSource *pVideoSource, enum DCCStopMode stop_mode)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCOpenAudioDecoderSource(struct DCC *pDCC, struct DCCAudioProfile *dcc_profile, struct DCCAudioSource **ppAudioSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCCloseAudioSource(struct DCCAudioSource *pAudioSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCGetAudioDecoderSourceInfo(struct DCCAudioSource *pAudioSource, RMuint32 *decoder, RMuint32 *engine, RMuint32 *timer)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSetAudioAACFormat(struct DCCAudioSource *pAudioSource, struct AudioDecoder_AACParameters_type *pFormat)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSetAudioSourceVolume(struct DCCAudioSource *pAudioSource, RMuint32 volume)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCPlayAudioSource(struct DCCAudioSource *pAudioSource)
+{
+	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCStopAudioSource(struct DCCAudioSource *pAudioSource)
 {
 	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
 

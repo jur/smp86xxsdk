@@ -66,6 +66,8 @@ typedef enum {
 	RMVideoDecoderPropertyID_BtsFIFO = 4137,
 	RMVideoDecoderPropertyID_CommandStatus = 4140,
 
+	RMAudioEnginePropertyID_Volume = 4162,
+
 	RMGenericPropertyID_ReadBufferCompletion = 4148,
 
 	RMGFXEnginePropertyID_ColorFormat = 4297,
@@ -114,6 +116,7 @@ typedef enum {
 	RMGenericPropertyID_Stop = 6042,
 	RMGenericPropertyID_Flush = 6043,
 	RMGenericPropertyID_SubPictureSurface = 6046,
+	RMGenericPropertyID_DisplayAspectRatio = 6065,
 	RMGenericPropertyID_MixerSourceIndex = 6067,
 	RMGenericPropertyID_MixerSourceState = 6069,
 

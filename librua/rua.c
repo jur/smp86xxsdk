@@ -32,12 +32,25 @@
 
 #define MAX_EVENTS 32
 
-/** Print debug message. */
-#if 0
-#define DPRINTF(args...) printf(args)
-#else
-#define DPRINTF(args...) do { } while(0)
+/* Enable one of this to save first part of stream in a file. */
+#undef DEBUGAUDIOSTREAM
+#undef DEBUGVIDEOSTREAM
+
+#ifdef DEBUGVIDEOSTREAM
+#define LOGDATAFILE "/tmp/videodat.bin"
 #endif
+
+#ifdef DEBUGVIDEOSTREAM
+#define LOGDATAFILE "/tmp/audiodat.bin"
+#endif
+
+/** Print debug message. */
+#define DPRINTF(args...) \
+	do { \
+		if (debug) { \
+			printf(args); \
+		} \
+	} while(0)
 
 /** Print error message. */
 #define EPRINTF(format, args...) fprintf(stderr, "librua: " __FILE__ ":%d: Error: " format, __LINE__, ## args)
@@ -56,6 +69,56 @@ struct RUABufferPool {
 	RMuint32 buffersize;
 	enum RUAPoolDirection direction;
 };
+
+static int debug = 0;
+
+#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
+static int logdatafd = -1;
+static int logdatasize = 0;
+
+static void logdata_open(void)
+{
+	if (logdatafd < 0) {
+		logdatafd = open(LOGDATAFILE, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+		if (logdatafd < 0) {
+			EPRINTF("Failed to open file " LOGDATAFILE "\n");
+		}
+		logdatasize = 0;
+	}
+}
+
+static void logdata_close(void)
+{
+	if (logdatafd >= 0) {
+		close(logdatafd);
+		logdatafd = -1;
+	}
+}
+
+static void logdata_write(uint8_t *data, size_t size)
+{
+	if (logdatafd >= 0) {
+		int rv;
+		int pos = 0;
+
+		while (size > 0) {
+			rv = write(logdatafd, &data[pos], size);
+			if (rv < 0) {
+				perror("failed writing logdata");
+				close(logdatafd);
+				logdatafd = -1;
+				break;
+			}
+			logdatasize += rv;
+			pos += rv;
+			size -= rv;
+		}
+		if (logdatasize > 100000) {
+			logdata_close();
+		}
+	}
+}
+#endif
 
 RMstatus RUACreateInstance(struct RUA **ppRua, RMuint32 chipnr)
 {
@@ -137,17 +200,17 @@ RMstatus RUASetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	
 	rv = ioctl(pRua->fd, 0xc01c4501, buffer);
 	if (rv < 0) {
-		EPRINTF("Failed ioctl in RUASetProperty(%p, %d, %d, %p, %d, %d) with rv = %d.\n",
+		EPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) ioctl rv = %d.\n",
 			pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		return RM_ERROR;
 	}
 	rv = buffer[6];
 	if (rv != RM_PENDING) {
 		if (rv == RM_OK) {
-			DPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) success with rv = %d.\n",
-				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
+			DPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) rv = RM_OK.\n",
+				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us);
 		} else {
-			EPRINTF("Failed RUASetProperty(%p, %d, %d, %p, %d, %d) with rv = %d.\n",
+			EPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		}
 		return rv;
@@ -173,15 +236,15 @@ RMstatus RUAGetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	
 	rv = ioctl(pRua->fd, 0xc01c4502, buffer);
 	if (rv < 0) {
-		EPRINTF("Failed ioctl in RUAGetProperty(%p, %d, %d, %p, %d) with rv = %d.\n",
+		EPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) ioctl rv = %d.\n",
 			pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
 	} else {
 		rv = buffer[6];
 		if (rv == RM_OK) {
-			DPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) success with rv = %d.\n",
-				pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
+			DPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) rv = RM_OK.\n",
+				pRua, ModuleID, PropertyID, pValue, ValueSize);
 		} else {
-			EPRINTF("Failed RUAGetProperty(%p, %d, %d, %p, %d) with rv = %d.\n",
+			EPRINTF("Failed RUAGetProperty(%p, %d, %d, %p, %d) rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
 		}
 		return rv;
@@ -204,15 +267,15 @@ RMstatus RUAExchangeProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 	
 	rv = ioctl(pRua->fd, 0xc01c4503, buffer);
 	if (rv < 0) {
-		EPRINTF("Failed ioctl in RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) with rv = %d.\n",
+		EPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) ioctl rv = %d.\n",
 			pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 	} else {
 		rv = buffer[6];
 		if (rv == RM_OK) {
-			DPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) success with rv = %d.\n",
-				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
+			DPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) rv = RM_OK.\n",
+				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize);
 		} else {
-			EPRINTF("Failed RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) with rv = %d.\n",
+			EPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 		}
 		return rv;
@@ -247,6 +310,7 @@ RMstatus RUALock(struct RUA *pRua, RMuint32 address, RMuint32 size)
 	RMuint32 offset = 0;
 	RMuint32 dramtype = 0;
 
+	DPRINTF("RUALock(%p, 0x%08x, %u)\n", pRua, address, size);
 	rv = gbus_lock_area(pRua->pGbus, &index, address, size, &count, &offset);
 	if (rv != RM_OK) {
 		return rv;
@@ -289,6 +353,7 @@ RMuint8 *RUAMap(struct RUA *pRua, RMuint32 address, RMuint32 size)
 	RMuint32 offset = 0;
 	RMuint8 *p;
 	
+	DPRINTF("RUAMap(%p, 0x%08x, %u)\n", pRua, address, size);
 	rv = gbus_get_locked_area(pRua->pGbus, address, size, &index, &count, &offset);
 	if (rv != RM_OK) {
 		return NULL;
@@ -315,7 +380,8 @@ RMstatus RUAUnLock(struct RUA *pRua, RMuint32 address, RMuint32 size)
 	RMuint32 dramtype = 0;
 	RMuint32 i;
 	RMuint32 buffer[2];
-	
+
+	DPRINTF("RUAUnLock(%p, 0x%08x, %u)\n", pRua, address, size);
 	rv = gbus_get_locked_area(pRua->pGbus, address, size, &index, &count, &offset);
 	if (rv != RM_OK) {
 		return rv;
@@ -395,7 +461,9 @@ void RUAFree(struct RUA *pRua, RMuint32 ptr)
 	buffer[0] = ptr;
 	rv = RUASetProperty(pRua, EMHWLIB_MODULE(MM, 0), RMMMPropertyID_Free, buffer, sizeof(buffer), 0);
 	if (rv != RM_OK) {
-		EPRINTF("%s failed to free memory at 0x%08x.\n", __FUNCTION__, ptr);
+		EPRINTF("RUAFree(%p, 0x%08x) failed\n", pRua, ptr);
+	} else {
+		DPRINTF("RUAFree(%p, 0x%x)\n", pRua, ptr);
 	}
 }
 
@@ -474,15 +542,21 @@ RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, 
 	struct RUABufferPool *pBufferPool;
 	RMuint32 modid = ModuleID | 0x80000000;
 
+#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
+	debug = 1;
+	logdata_open();
+#endif
+
 	pBufferPool = malloc(sizeof(*pBufferPool));
 	if (pBufferPool == NULL) {
+		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) rv = RM_FATALOUTOFMEMORY\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
 		return RM_FATALOUTOFMEMORY;
 	}
 	pBufferPool->pDmapool = dmapool_open(pRua->pLlad, NULL, BufferCount, log2BufferSize);
 	if (pBufferPool->pDmapool == NULL) {
 		free(pBufferPool);
 		pBufferPool = NULL;
-		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) failed with RM_ERROR\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
+		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) rv = RM_ERROR\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
 		return RM_ERROR;
 	}
 	pBufferPool->poolid = dmapool_get_id(pBufferPool->pDmapool);
@@ -492,6 +566,7 @@ RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, 
 	pBufferPool->moduleid = (modid & 0x7FFFFFFF);
 	if (pBufferPool->direction != RUA_POOL_DIRECTION_RECEIVE) {
 		*ppBufferPool = pBufferPool;
+		DPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, *%p = %p) rv = RM_OK\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool, pBufferPool);
 		return RM_OK;
 	}
 	if (pBufferPool->moduleid == 0) {
@@ -499,16 +574,20 @@ RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, 
 		pBufferPool->pDmapool = NULL;
 		free(pBufferPool);
 		pBufferPool = NULL;
-		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) failed with RM_ERROR (moduleid)\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
+		EPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, %p) rv = RM_ERROR (moduleid)\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool);
 		return RM_ERROR;
 	}
 	release_receive_pool(pBufferPool);
 	*ppBufferPool = pBufferPool;
+	DPRINTF("RUAOpenPool(%p, %u, %u, %u, %u, *%p = %p) rv = RM_OK\n", pRua, ModuleID, BufferCount, log2BufferSize, direction, ppBufferPool, pBufferPool);
 	return RM_OK;
 }
 
 RMstatus RUAClosePool(struct RUABufferPool *pBufferPool)
 {
+#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
+	logdata_close();
+#endif
 
 	dmapool_close(pBufferPool->pDmapool);
 	free(pBufferPool);
@@ -530,6 +609,7 @@ RMstatus RUASetAddressID(struct RUA *pRua, RMuint32 address, RMuint32 ID)
 			pRua, address, ID);
 		return RM_ERROR;
 	} else {
+		DPRINTF("RUASetAddressID(%p, 0x%08x, %u) rv = RM_OK\n", pRua, address, ID);
 		return RM_OK;
 	}
 }
@@ -551,6 +631,7 @@ RMuint32 RUAGetAddressID(struct RUA *pRua, RMuint32 ID)
 			EPRINTF("RUAGetAddressID(%p, %u) failed with 0\n",
 				pRua, ID);
 		}
+		DPRINTF("RUAGetAddressID(%p, %u) rv = %u\n", pRua, ID, iocmd[0]);
 		return iocmd[0];
 	}
 #if 0
@@ -566,8 +647,10 @@ RMstatus RUAGetBuffer(struct RUABufferPool *pBufferPool, RMuint8 **ppBuffer, RMu
 	buffer = dmapool_get_buffer(pBufferPool->pDmapool, &TimeOut_us);
 	*ppBuffer = buffer;
 	if (buffer == NULL) {
+		DPRINTF("RUAGetBuffer(%p, *%p = %p, %u) rv = RM_PENDING\n", pBufferPool, ppBuffer, buffer, TimeOut_us);
 		return RM_PENDING;
 	} else {
+		DPRINTF("RUAGetBuffer(%p, *%p = %p, %u) rv = RM_OK\n", pBufferPool, ppBuffer, buffer, TimeOut_us);
 		return RM_OK;
 	}
 
@@ -583,8 +666,19 @@ RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *
 	physical_address = dmapool_get_physical_address(pBufferPool->pDmapool, pData, DataSize);
 	rv = dmapool_acquire(pBufferPool->pDmapool, physical_address);
 	if (rv != RM_OK) {
+		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
 		return rv;
 	}
+#ifdef DEBUGVIDEOSTREAM
+	if ((ModuleID & 0xFF) == VideoDecoder) {
+		logdata_write(pData, DataSize);
+	}
+#endif
+#ifdef DEBUGAUDIOSTREAM
+	if ((ModuleID & 0xFF) == AudioDecoder) {
+		logdata_write(pData, DataSize);
+	}
+#endif
 	dmapool_flush_cache(pBufferPool->pDmapool, physical_address, DataSize);
 	iocmd[0] = ModuleID;
 	iocmd[1] = pBufferPool->poolid;
@@ -594,12 +688,15 @@ RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *
 	iocmd[5] = InfoSize;
 	ret = ioctl(pRua->fd, 0x40184504, iocmd);
 	if (ret >= 0) {
+		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = RM_OK\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize);
 		return RM_OK;
 	}
 	rv = dmapool_release(pBufferPool->pDmapool, iocmd[2]);
 	if (rv == RM_OK) {
+		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = RM_PENDING\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize);
 		return RM_PENDING;
 	}
+	DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
 	return rv;
 }
 
@@ -610,15 +707,19 @@ RMstatus RUAReleaseBuffer(struct RUABufferPool *pBufferPool, RMuint8 *pBuffer)
 
 	physical_address = dmapool_get_physical_address(pBufferPool->pDmapool, pBuffer, 0);
 	if (physical_address == 0) {
+		DPRINTF("RUAReleaseBuffer(%p, %p) rv = RM_ERROR\n", pBufferPool, pBuffer);
 		return RM_ERROR;
 	}
 	rv = dmapool_release(pBufferPool->pDmapool, physical_address);
 	if (rv == RM_OK) {
+		DPRINTF("RUAReleaseBuffer(%p, %p) rv = RM_OK\n", pBufferPool, pBuffer);
 		return RM_OK;
 	}
 	if (pBufferPool->direction != RUA_POOL_DIRECTION_RECEIVE) {
+		DPRINTF("RUAReleaseBuffer(%p, %p) rv = %d\n", pBufferPool, pBuffer, rv);
 		return rv;
 	}
+	DPRINTF("RUAReleaseBuffer(%p, %p) rv = RM_OK\n", pBufferPool, pBuffer);
 	release_receive_pool(pBufferPool);
 	return RM_OK;
 }
@@ -628,6 +729,7 @@ RMuint32 RUAGetAvailableBufferCount(struct RUABufferPool *pBufferPool)
 	RMuint32 rv;
 	
 	rv = dmapool_get_available_buffer_count(pBufferPool->pDmapool);
+	DPRINTF("RUAGetAvailableBufferCount(%p) rv = %u\n", pBufferPool, rv);
 
 	return rv;
 }

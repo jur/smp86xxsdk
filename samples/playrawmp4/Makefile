@@ -7,11 +7,21 @@
 
 SMPSDKBASE = ../..
 
-PROGRAM = playmp4
+PROGRAM = playrawmp4
+
+FFMPEG = ffmpeg
+YOUTUBEDL = youtube-dl
+
+VIDRAW = video-$(YOUTUBEID).raw
+AUDRAW = audio-$(YOUTUBEID).raw
+VIDEOFILE = youtubevideo-$(YOUTUBEID).mp4
+# Format 18 is 640x360 mp4
+YOUTUBEFORMAT = 18
+YOUTUBELINK = https://www.youtube.com/watch?v=$(YOUTUBEID)
 
 SHELL = bash -x
 
-MODS += playmp4
+MODS += playrawmp4
 MODS += oslayer
 LDLIBS += -ldcc
 LDLIBS += -lrua
@@ -27,9 +37,11 @@ CPPFLAGS += -g
 CPPFLAGS += -I$(SMPSDKBASE)/include
 LDFLAGS += -L$(SMPSDKBASE)/lib
 
-install: all
+install: all $(AUDRAW) $(VIDRAW)
 	mkdir -p "$(WEBDIR)"
 	cp "$(PROGRAM)" "$(WEBDIR)"
+	cp "$(VIDRAW)" "$(WEBDIR)"
+	cp "$(AUDRAW)" "$(WEBDIR)"
 	cp "$(SMP86XXBASE)/smp86xx_rootfs_2.8.2.0/build_mipsel/gdbserver-6.5/gdbserver" "$(WEBDIR)"
 
 run: install
@@ -39,6 +51,8 @@ run: install
 		-e "s/CLIENTIP/CLIENTIP/g" \
 		-e "s/PROGRAM/$(PROGRAM)/g" \
 		-e "s/USELOCALLIBS/$(USELOCALLIBS)/g" \
+		-e "s/VIDRAW/$(VIDRAW)/g" \
+		-e "s/AUDRAW/$(AUDRAW)/g" \
 		<"run.sh" \
 		>"$(WEBDIR)/run-$(PROGRAM).sh"
 	chmod +x "$(WEBDIR)/run-$(PROGRAM).sh"
@@ -50,6 +64,8 @@ debug: install
 		-e "s/SERVERIP/$(SERVERIP)/g" \
 		-e "s/CLIENTIP/CLIENTIP/g" \
 		-e "s/PROGRAM/$(PROGRAM)/g" \
+		-e "s/VIDRAW/$(VIDRAW)/g" \
+		-e "s/AUDRAW/$(AUDRAW)/g" \
 		<"run.sh" \
 		>"$(WEBDIR)/run-$(PROGRAM).sh"
 	chmod +x "$(WEBDIR)/run-$(PROGRAM).sh"
@@ -68,7 +84,16 @@ all: $(PROGRAM)
 
 $(PROGRAM): $(OBJS)
 
+$(VIDEOFILE):
+	$(YOUTUBEDL) -o "$@" -f $(YOUTUBEFORMAT) "$(YOUTUBELINK)"
+
+$(VIDRAW): $(VIDEOFILE)
+	$(FFMPEG) -i $^ -vbsf h264_mp4toannexb -vcodec copy -an -f rawvideo $(DURATION) $@
+
+$(AUDRAW): $(VIDEOFILE)
+	$(FFMPEG) -i $^ -vn -sn -f adts -acodec copy $(DURATION) $@
+
 clean:
-	rm -f $(PROGRAM) $(OBJS)
+	rm -f $(PROGRAM) $(OBJS) $(AUDRAW) $(VIDRAW)
 
 .PHONY: install all run clean debug gdb
