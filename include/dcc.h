@@ -244,6 +244,8 @@ RMstatus DCCGetAudioDecoderSourceInfo(struct DCCAudioSource *pAudioSource, RMuin
 RMstatus DCCSetAudioAACFormat(struct DCCAudioSource *pAudioSource, struct AudioDecoder_AACParameters_type *pFormat);
 RMstatus DCCSetAudioSourceVolume(struct DCCAudioSource *pAudioSource, RMuint32 volume);
 RMstatus DCCPlayAudioSource(struct DCCAudioSource *pAudioSource);
+RMstatus DCCPauseAudioSource(struct DCCAudioSource *pAudioSource);
 RMstatus DCCStopAudioSource(struct DCCAudioSource *pAudioSource);
+RMstatus DCCSetAudioBtsThreshold(struct DCCAudioSource *pAudioSource, RMuint32 level);
 
 #endif

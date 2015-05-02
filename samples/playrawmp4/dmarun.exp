@@ -29,4 +29,5 @@ expect -re "#"
 send "./run\n"
 set timeout -1
 expect -re "#"
-send "exit\n"
+send "cat nohup.out\n"
+interact

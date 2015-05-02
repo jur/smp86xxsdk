@@ -66,10 +66,18 @@ typedef enum {
 	RMVideoDecoderPropertyID_CodecX = 4136,
 	RMVideoDecoderPropertyID_BtsFIFO = 4137,
 	RMVideoDecoderPropertyID_CommandStatus = 4140,
+	RMGenericPropertyID_ReadBufferCompletion = 4148,
 
 	RMAudioEnginePropertyID_Volume = 4162,
-
-	RMGenericPropertyID_ReadBufferCompletion = 4148,
+	RMAudioEnginePropertyID_DecoderSharedMemoryInfo = 4175,
+	RMAudioEnginePropertyID_DecoderSharedMemory = 4176,
+	RMAudioDecoderPropertyID_DRAMSize = 4187,
+	RMAudioDecoderPropertyID_Open = 4188,
+	RMAudioDecoderPropertyID_Command = 4193,
+	RMAudioDecoderPropertyID_State = 4194,
+	RMAudioDecoderPropertyID_Codec = 4196,
+	RMAudioDecoderPropertyID_AudioBtsThreshold = 4197,
+	RMAudioDecoderPropertyID_AACParameters = 4201,
 
 	RMGFXEnginePropertyID_ColorFormat = 4297,
 

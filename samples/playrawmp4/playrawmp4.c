@@ -21,7 +21,7 @@
 #include "dcc.h"
 
 /** Define to play audio also. */
-#undef PLAY_AUDIO
+#define PLAY_AUDIO
 
 /** There is only one chip in the DMA-2500. */
 #define DEFAULT_CHIP 0
@@ -442,7 +442,7 @@ static RMstatus play_video(app_rua_context_t *context)
 #ifdef PLAY_AUDIO
 	rv = DCCPlayAudioSource(context->pAudioSource);
 	if (RMFAILED(rv)) {
-		fprintf(stderr, "Cannot play video source, rv = %d\n", rv);
+		fprintf(stderr, "Cannot play audio source, rv = %d\n", rv);
 		cleanup(context);
 		return rv;
 	}

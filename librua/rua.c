@@ -526,7 +526,7 @@ void RUAFree(struct RUA *pRua, RMuint32 ptr)
 
 RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RMuint32 EventCount, RMuint32 TimeOut_us, RMuint32 *pEventNum)
 {
-	RMuint32 buffer[2 + MAX_EVENTS + 1];
+	RMuint32 buffer[2 + 2 * MAX_EVENTS + 1];
 	RMuint32 i;
 	int rv;
 	int eventnr;
@@ -535,7 +535,7 @@ RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RM
 	gettimeofday(&tv, NULL);
 #endif
 
-	if (EventCount >= 32) {
+	if (EventCount >= MAX_EVENTS) {
 		EPRINTF("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR\n",
 		pRua, pEvents, EventCount, TimeOut_us, pEventNum);
 		return RM_ERROR;
@@ -553,9 +553,14 @@ RMstatus RUAWaitForMultipleEvents(struct RUA *pRua, struct RUAEvent *pEvents, RM
 		pRua, pEvents, EventCount, TimeOut_us, pEventNum, rv);
 		return RM_ERROR;
 	}
-	eventnr = buffer[2 + MAX_EVENTS];
+	eventnr = buffer[2 + 2 * MAX_EVENTS];
 	if (eventnr == -1) {
 		return RM_PENDING;
+	}
+	if (eventnr >= MAX_EVENTS) {
+		EPRINTF("RUAWaitForMultipleEvents(%p, %p, %u, %uus, %p) rv = RM_ERROR, eventnr = %d\n",
+		pRua, pEvents, EventCount, TimeOut_us, pEventNum, eventnr);
+		return RM_ERROR;
 	}
 	pEvents[eventnr].Mask = buffer[3 + 2 * eventnr];
 	if (pEventNum != NULL) {

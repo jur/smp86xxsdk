@@ -44,13 +44,13 @@ typedef RMuint32 dcc_malloc_t(struct RUA *pRua, RMuint32 ModuleID, RMuint32 dram
 typedef void dcc_free_t(struct RUA *pRua, RMuint32 addr);
 
 struct DCC {
-	struct RUA *pRua;
+	struct RUA *pRua; // 0x00
 	RMuint32 video_ucode_address;
 	RMuint32 audio_ucode_address;
 	RMuint32 demux_ucode_address;
-	RMuint32 dram;
-	dcc_malloc_t *rua_malloc;
-	dcc_free_t *rua_free;
+	RMuint32 dram; // 0x10
+	dcc_malloc_t *rua_malloc; // 0x14
+	dcc_free_t *rua_free; // 0x18
 };
 
 typedef struct {
@@ -104,6 +104,17 @@ struct DCCResource {
 	RMuint32 reservedsize;
 };
 
+struct DCCAudioSource {
+	struct RUA *pRua; // 0x00
+	struct DCC *pDCC; // 0x04
+	RMuint32 decodermoduleid; // 0x08
+	RMuint32 enginemoduleid; // 0x0c
+	RMuint32 STCID; // 0x18
+	RMuint32 reserved1C; // 0x1c
+	RMuint32 mem1; // 0x20
+	RMuint32 mem2; // 0x2c
+};
+
 static RMuint32 default_rua_malloc(struct RUA *pRua, RMuint32 ModuleID, RMuint32 dramIndex, enum RUADramType dramtype, RMuint32 size)
 {
 	return RUAMalloc(pRua, dramIndex, dramtype, size);
@@ -151,6 +162,36 @@ static RMstatus send_video_command(struct RUA *pRua, RMuint32 decodermoduleid, R
 	return RM_OK;
 }
 
+static RMstatus send_audio_command(struct RUA *pRua, RMuint32 decodermoduleid, RMuint32 cmd)
+{
+	RMstatus rv;
+	struct RUAEvent event;
+	RMuint32 index;
+	RMuint32 state;
+
+	event.ModuleID = decodermoduleid;
+	event.Mask = 1;
+	rv = RUAResetEvent(pRua, &event);
+	if (rv != RM_OK) {
+		return rv;
+	}
+
+	rv = RUASetProperty(pRua, decodermoduleid, RMAudioDecoderPropertyID_Command, &cmd, sizeof(cmd), 0);
+	if (rv != RM_OK) {
+		return rv;
+	}
+
+	rv = RUAWaitForMultipleEvents(pRua, &event, 1, 1000000, &index);
+	if (rv != RM_OK) {
+		return rv;
+	}
+
+	rv = RUAGetProperty(pRua, decodermoduleid, RMAudioDecoderPropertyID_State, &state, sizeof(state));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	return RM_OK;
+}
 
 RMstatus DCCOpen(struct RUA *pRua, struct DCC **ppDCC)
 {
@@ -1527,9 +1568,107 @@ RMstatus DCCStopVideoSource(struct DCCVideoSource *pVideoSource, enum DCCStopMod
 
 RMstatus DCCOpenAudioDecoderSource(struct DCC *pDCC, struct DCCAudioProfile *dcc_profile, struct DCCAudioSource **ppAudioSource)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	struct DCCAudioSource *pAudioSource;
+	RMstatus rv;
+	RMuint32 audioengineid = AudioEngine;
+	RMuint32 audiodecoderid = AudioDecoder;
+	RMuint32 number_of_engines;
+	RMuint32 number_of_decoders;
+	RMuint32 buffer_info[2];
+	RMuint32 result_info[1];
+	RMuint32 result_shm[2];
+	RMuint32 buffer_dram[4];
+	RMuint32 result_dram[2];
+	RMuint32 buffer_shared[10];
 
-	return RM_NOTIMPLEMENTED;
+	pAudioSource = malloc(sizeof(*pAudioSource));
+	if (pAudioSource == NULL) {
+		fprintf(stderr, "Error: out of memory\n");
+
+		return RM_FATALOUTOFMEMORY;
+	}
+	memset(pAudioSource, 0, sizeof(*pAudioSource));
+	pAudioSource->pRua = pDCC->pRua;
+	pAudioSource->pDCC = pDCC;
+	pAudioSource->STCID = dcc_profile->STCID;
+
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(Enumerator, 0), RMEnumeratorPropertyID_CategoryIDToNumberOfInstances, &audioengineid, sizeof(audioengineid), &number_of_engines, sizeof(number_of_engines));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	if (dcc_profile->AudioEngineID >= number_of_engines) {
+		return RM_PARAMETER_OUT_OF_RANGE;
+	}
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(Enumerator, 0), RMEnumeratorPropertyID_CategoryIDToNumberOfInstances, &audiodecoderid, sizeof(audiodecoderid), &number_of_decoders, sizeof(number_of_decoders));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	if (dcc_profile->AudioDecoderID >= number_of_decoders/number_of_engines) {
+		return RM_PARAMETER_OUT_OF_RANGE;
+	}
+	pAudioSource->enginemoduleid = EMHWLIB_MODULE(AudioEngine, dcc_profile->AudioEngineID);
+	pAudioSource->decodermoduleid = EMHWLIB_MODULE(AudioDecoder, dcc_profile->AudioDecoderID);
+	memset(buffer_info, 0, sizeof(buffer_info));
+	rv = RUAExchangeProperty(pDCC->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_DecoderSharedMemoryInfo, buffer_info, sizeof(buffer_info), result_info, sizeof(result_info));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	rv = RUAGetProperty(pDCC->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_DecoderSharedMemory, &result_shm, sizeof(result_shm));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	if (result_shm[0] == 0) {
+		result_shm[0] = pDCC->rua_malloc(pDCC->pRua, pAudioSource->enginemoduleid, pDCC->dram, RUA_DRAM_UNPROTECTED, result_info[0]);
+		result_shm[1] = result_info[0];
+		rv = set_property(pDCC->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_DecoderSharedMemory, &result_shm, sizeof(result_shm));
+		if (rv != RM_OK) {
+			return rv;
+		}
+		pAudioSource->reserved1C = 1;
+	} else {
+		pAudioSource->reserved1C = 1;
+	}
+	memset(buffer_dram, 0, sizeof(buffer_dram));
+	buffer_dram[0] = 12;
+	buffer_dram[1] = 0x00000F00;
+	buffer_dram[2] = dcc_profile->BitstreamFIFOSize;
+	buffer_dram[3] = dcc_profile->XferFIFOCount;
+	rv = RUAExchangeProperty(pDCC->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_DRAMSize, buffer_dram, sizeof(buffer_dram), result_dram, sizeof(result_dram));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	memset(buffer_shared, 0, sizeof(buffer_shared));
+	buffer_shared[0] = buffer_dram[0]; // 0x00
+	buffer_shared[1] = buffer_dram[1]; // 0x04
+	buffer_shared[2] = dcc_profile->BitstreamFIFOSize; // 0x08
+	buffer_shared[3] = dcc_profile->XferFIFOCount; // 0x0c
+	buffer_shared[4] = 0; // 0x10
+	buffer_shared[5] = result_dram[0]; // 0x14
+	buffer_shared[6] = 0; // 0x18
+	buffer_shared[7] = result_dram[1]; // 0x1c
+	buffer_shared[8] = dcc_profile->DemuxProgramID; // 0x20
+	buffer_shared[9] = dcc_profile->STCID; //0x24
+	if (result_dram[0] != 0) {
+		buffer_shared[4] = pDCC->rua_malloc(pDCC->pRua, pAudioSource->enginemoduleid, pDCC->dram, RUA_DRAM_UNPROTECTED, result_dram[0]);
+		if (buffer_shared[4] == 0) {
+			return RM_FATALOUTOFMEMORY;
+		}
+		pAudioSource->mem1 = buffer_shared[4];
+	}
+	if (result_dram[1] != 0) {
+		buffer_shared[6] = pDCC->rua_malloc(pDCC->pRua, pAudioSource->enginemoduleid, pDCC->dram, RUA_DRAM_UNPROTECTED, result_dram[1]);
+		if (buffer_shared[6] == 0) {
+			return RM_FATALOUTOFMEMORY;
+		}
+		pAudioSource->mem2 = buffer_shared[6];
+	}
+	rv = set_property(pDCC->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_Open, &buffer_shared, sizeof(buffer_shared));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	*ppAudioSource = pAudioSource;
+
+	return RM_OK;
 }
 
 RMstatus DCCCloseAudioSource(struct DCCAudioSource *pAudioSource)
@@ -1541,37 +1680,119 @@ RMstatus DCCCloseAudioSource(struct DCCAudioSource *pAudioSource)
 
 RMstatus DCCGetAudioDecoderSourceInfo(struct DCCAudioSource *pAudioSource, RMuint32 *decoder, RMuint32 *engine, RMuint32 *timer)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	if (pAudioSource == NULL) {
+		return RM_INVALID_PARAMETER;
+	}
 
-	return RM_NOTIMPLEMENTED;
+	if (decoder != NULL) {
+		*decoder = pAudioSource->decodermoduleid;
+	}
+	if (timer != NULL) {
+		*timer = pAudioSource->STCID;
+	}
+	if (engine != NULL) {
+		*engine = pAudioSource->enginemoduleid;
+	}
+
+	return RM_OK;
 }
 
 RMstatus DCCSetAudioAACFormat(struct DCCAudioSource *pAudioSource, struct AudioDecoder_AACParameters_type *pFormat)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMstatus rv;
+	RMuint32 buffer[1];
+	
+	rv = send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 7);
+	if (rv != RM_OK) {
+		return rv;
+	}
+	/* Set codec to AAC. */
+	buffer[0] = 3;
+	rv = set_property(pAudioSource->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_Codec, &buffer, sizeof(buffer));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	rv = set_property(pAudioSource->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_AACParameters, pFormat, sizeof(*pFormat));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	rv = send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 6);
+	if (rv != RM_OK) {
+		return rv;
+	}
 
-	return RM_NOTIMPLEMENTED;
+	return RM_OK;
 }
 
 RMstatus DCCSetAudioSourceVolume(struct DCCAudioSource *pAudioSource, RMuint32 volume)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMstatus rv;
+	int i;
 
-	return RM_NOTIMPLEMENTED;
+	for (i = 0; i < 12; i++) {
+		RMuint32 buffervol[2];
+
+		buffervol[0] = i;
+		buffervol[1] = volume;
+		rv = set_property(pAudioSource->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_Volume, &buffervol, sizeof(buffervol));
+		if (rv != RM_OK) {
+			return rv;
+		}
+	}
+
+	return RM_OK;
 }
 
 RMstatus DCCPlayAudioSource(struct DCCAudioSource *pAudioSource)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMstatus rv;
+	RMuint32 codec;
+	RMuint32 level = 256;
 
-	return RM_NOTIMPLEMENTED;
+	rv = RUAGetProperty(pAudioSource->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_Codec, &codec, sizeof(codec));
+	if (rv != RM_OK) {
+		return rv;
+	}
+
+	switch (codec) {
+		case 2:
+			level = 512;
+			break;
+
+		case 7:
+			level = 1024;
+			break;
+
+		case 14:
+			level = 0;
+			break;
+	}
+	rv = DCCSetAudioBtsThreshold(pAudioSource, level);
+	if (rv != RM_OK) {
+		EPRINTF("DCCSetAudioBtsThreshold() failed with rv = %u.\n", rv);
+		return rv;
+	}
+	
+	return send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 1);
+}
+
+RMstatus DCCPauseAudioSource(struct DCCAudioSource *pAudioSource)
+{
+	RMstatus rv;
+	
+	return send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 2);
 }
 
 RMstatus DCCStopAudioSource(struct DCCAudioSource *pAudioSource)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMstatus rv;
+	
+	return send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 3);
+}
 
-	return RM_NOTIMPLEMENTED;
+RMstatus DCCSetAudioBtsThreshold(struct DCCAudioSource *pAudioSource, RMuint32 level)
+{
+	return set_property(pAudioSource->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_AudioBtsThreshold, &level, sizeof(level));
 }
 
 void dontremovefunction(void)
