@@ -15,7 +15,7 @@ PREFIX ?= /usr/local
 # yes for using libraries installed on target, no for using the compiled libraries
 USELOCALLIBS = no
 #USELOCALLIBS = yes
-USELOCALLIBLLAD = yes
+USELOCALLIBLLAD = no
 USELOCALLIBRUA = no
 USELOCALLIBDCC = no
 

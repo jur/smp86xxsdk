@@ -30,6 +30,15 @@
 
 #define DEVICE_MUM "/dev/mum%s"
 
+#define LLAD_DMAPOOL_OPEN 0x21
+#define LLAD_DMAPOOL_CLOSE 0x22
+#define LLAD_DMAPOOL_GET_BUFFER 0x24
+#define LLAD_DMAPOOL_GET_PHYS 0x25
+#define LLAD_DMAPOOL_ACQUIRE 0x26
+#define LLAD_DMAPOOL_RELEASE 0x27
+#define LLAD_DMAPOOL_FLUSH_CACHE 0x28
+#define LLAD_DMAPOOL_INV_CACHE 0x29
+#define LLAD_DMAPOOL_GET_BUF_COUNT 0x2B
 #define LLAD_LOCK_AREA 0x46
 #define LLAD_GET_AREA 0x47
 #define LLAD_UNLOCK_AREA 0x48
@@ -66,6 +75,13 @@ typedef struct {
 	RMuint32 numberOfAreas;
 	RMuint32 size;
 } llad_config_t;
+
+struct dmapool {
+	int fd;
+	void *addr;
+	RMuint32 id;
+	RMuint32 buffersize;
+};
 
 struct LLAD *llad_open(const char *chipname)
 {
@@ -321,59 +337,180 @@ void gbus_close(struct GBUS *pGbus)
 
 struct dmapool *dmapool_open(struct LLAD *h, void *area, RMuint32 buffercount, RMuint32 log2_buffersize)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	struct dmapool *pDmapool;
+	int rv;
+	RMuint32 buffer[4];
 
-	return NULL;
+	pDmapool = malloc(sizeof(*pDmapool));
+	if (pDmapool != NULL) {
+		memset(pDmapool, 0, sizeof(*pDmapool));
+		pDmapool->fd = h->fd;
+
+		memset(buffer, 0, sizeof(*buffer));
+		buffer[0] = (RMuint32) area;
+		buffer[1] = buffercount;
+		buffer[2] = log2_buffersize;
+		rv = ioctl(pDmapool->fd, LLAD_DMAPOOL_OPEN, buffer);
+		if (rv != 0) {
+			free(pDmapool);
+			pDmapool = NULL;
+		} else {
+			RMuint32 addr;
+
+			pDmapool->id = buffer[3];
+			pDmapool->buffersize = buffercount << log2_buffersize;
+
+			addr = 0x02000000 + pDmapool->id;
+
+			pDmapool->addr = mmap(NULL, pDmapool->buffersize, PROT_READ | PROT_WRITE, MAP_SHARED, pDmapool->fd, addr);
+			if (pDmapool->addr == MAP_FAILED) {
+				rv = ioctl(pDmapool->fd, LLAD_DMAPOOL_CLOSE, &pDmapool->id);
+				free(pDmapool);
+				pDmapool = NULL;
+			}
+		}
+	}
+
+	return pDmapool;
 }
 
 void dmapool_close(struct dmapool *h)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	int rv;
+
+	if (h->addr != MAP_FAILED) {
+		rv = munmap(h->addr, h->buffersize);
+		if (rv != 0) {
+			perror("dmapool_close() failed");
+		}
+		h->addr = MAP_FAILED;
+		h->buffersize = 0;
+	}
+	rv = ioctl(h->fd, LLAD_DMAPOOL_CLOSE, &h->id);
+	if (rv != 0) {
+		perror("dmapool_close() failed");
+	}
+	free(h);
+	h = NULL;
 }
 
 RMuint32 dmapool_get_id(struct dmapool *h)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	return h->id;
+}
 
-	return 0;
+void dmapool_get_info(struct dmapool *h, RMuint32 *size)
+{
+	*size = h->buffersize;
 }
 
 RMuint8 *dmapool_get_buffer(struct dmapool *h, RMuint32 *timeout_microsecond)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMuint32 buffer[3];
+	int rv;
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	buffer[2] = *timeout_microsecond;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_GET_BUFFER, buffer);
+	if (rv == 0) {
+		*timeout_microsecond = buffer[2];
+		return (RMuint8 *) buffer[1];
+	}
 
 	return NULL;
 }
 
 RMuint32 dmapool_get_physical_address(struct dmapool *h, RMuint8 *ptr, RMuint32 size)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMuint32 buffer[4];
+	int rv;
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	buffer[1] = (RMuint32) ptr;
+	buffer[2] = size;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_GET_PHYS, buffer);
+	if (rv == 0) {
+		return buffer[3];
+	}
 
 	return 0;
-}
-
-RMstatus dmapool_release(struct dmapool *h, RMuint32 physical_address)
-{
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
-
-	return RM_NOTIMPLEMENTED;
 }
 
 RMstatus dmapool_acquire(struct dmapool *h, RMuint32 physical_address)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMuint32 buffer[2];
+	int rv;
 
-	return RM_NOTIMPLEMENTED;
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	buffer[1] = physical_address;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_ACQUIRE, buffer);
+	if (rv != 0) {
+		return RM_ERROR;
+	}
+
+	return RM_OK;
+}
+
+RMstatus dmapool_release(struct dmapool *h, RMuint32 physical_address)
+{
+	RMuint32 buffer[2];
+	int rv;
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	buffer[1] = physical_address;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_RELEASE, buffer);
+	if (rv != 0) {
+		return RM_ERROR;
+	}
+
+	return RM_OK;
 }
 
 void dmapool_flush_cache(struct dmapool *h, RMuint32 physical_address, RMuint32 size)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMuint32 buffer[4];
+	int rv;
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	buffer[2] = size;
+	buffer[3] = physical_address;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_FLUSH_CACHE, buffer);
+	if (rv != 0) {
+		perror("dmapool_flush_cache() failed");
+	}
+}
+
+void dmapool_invalidate_cache(struct dmapool *h, RMuint32 physical_address, RMuint32 size)
+{
+	RMuint32 buffer[4];
+	int rv;
+
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	buffer[2] = size;
+	buffer[3] = physical_address;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_INV_CACHE, buffer);
+	if (rv != 0) {
+		perror("dmapool_invalidate_cache() failed");
+	}
 }
 
 RMuint32 dmapool_get_available_buffer_count(struct dmapool *h)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMuint32 buffer[2];
+	int rv;
 
-	return 0;
+	memset(buffer, 0, sizeof(buffer));
+	buffer[0] = h->id;
+	rv = ioctl(h->fd, LLAD_DMAPOOL_GET_BUF_COUNT, buffer);
+	if (rv != 0) {
+		return -1;
+	}
+
+	return buffer[1];
 }

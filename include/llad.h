@@ -37,11 +37,13 @@ RMstatus gbus_unlock_region(struct GBUS *pGbus, RMuint32 index);
 struct dmapool *dmapool_open(struct LLAD *h, void *area, RMuint32 buffercount, RMuint32 log2_buffersize);
 void dmapool_close(struct dmapool *h);
 RMuint32 dmapool_get_id(struct dmapool *h);
+void dmapool_get_info(struct dmapool *h, RMuint32 *size);
 RMuint8 *dmapool_get_buffer(struct dmapool *h, RMuint32 *timeout_microsecond);
 RMuint32 dmapool_get_physical_address(struct dmapool *h, RMuint8 *ptr, RMuint32 size);
 RMstatus dmapool_release(struct dmapool *h, RMuint32 physical_address);
 RMstatus dmapool_acquire(struct dmapool *h, RMuint32 physical_address);
 void dmapool_flush_cache(struct dmapool *h, RMuint32 physical_address, RMuint32 size);
+void dmapool_invalidate_cache(struct dmapool *h, RMuint32 physical_address, RMuint32 size);
 RMuint32 dmapool_get_available_buffer_count(struct dmapool *h);
 
 #endif

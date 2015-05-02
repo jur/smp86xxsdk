@@ -691,10 +691,6 @@ RMuint32 RUAGetAddressID(struct RUA *pRua, RMuint32 ID)
 		DPRINTF("RUAGetAddressID(%p, %u) rv = %u\n", pRua, ID, iocmd[0]);
 		return iocmd[0];
 	}
-#if 0
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
-	return RM_ERROR;
-#endif
 }
 
 RMstatus RUAGetBuffer(struct RUABufferPool *pBufferPool, RMuint8 **ppBuffer, RMuint32 TimeOut_us)
@@ -721,9 +717,12 @@ RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *
 	int ret;
 
 	physical_address = dmapool_get_physical_address(pBufferPool->pDmapool, pData, DataSize);
+	if (physical_address == 0) {
+		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = RM_ERROR from dmapool_get_physical_address()\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize);
+	}
 	rv = dmapool_acquire(pBufferPool->pDmapool, physical_address);
 	if (rv != RM_OK) {
-		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
+		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d from dmapool_acquire()\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
 		return rv;
 	}
 #ifdef DEBUGVIDEOSTREAM
@@ -753,7 +752,7 @@ RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *
 		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = RM_PENDING\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize);
 		return RM_PENDING;
 	}
-	DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
+	DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d (from dmapool_release)\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
 	return rv;
 }
 
