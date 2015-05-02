@@ -1,4 +1,4 @@
-set solib-search-path $DMABASE/upgrade/lib:$PREFIX/lib
+set solib-search-path $SMPSDKLIBDIRS:$DMABASE/upgrade/lib:$PREFIX/lib
 target remote $CLIENTIP:1234
 
 set pagination off

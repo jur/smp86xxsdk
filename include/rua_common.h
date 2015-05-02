@@ -251,6 +251,7 @@ typedef enum {
 	DispDigitalOut = 18,
 	DispMainAnalogOut = 19,
 	DispComponentOut = 20,
+	DispCompositeOut = 21,
 	CPUBlock = 22,
 	DemuxEngine = 23,
 	MpegEngine = 25,
@@ -266,6 +267,8 @@ typedef enum {
 	ClosedCaptionDecoder = 35,
 	StreamCapture = 36,
 	STC = 42,
+	DispVideoPlane = 50,
+	DispHDSDConverter = 51,
 } RMcategoryID;
 
 #endif

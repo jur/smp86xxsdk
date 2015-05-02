@@ -13,8 +13,11 @@ TESTPRG = playrawmp4
 PREFIX ?= /usr/local
 
 # yes for using libraries installed on target, no for using the compiled libraries
-#USELOCALLIBS = no
-USELOCALLIBS = yes
+USELOCALLIBS = no
+#USELOCALLIBS = yes
+USELOCALLIBLLAD = yes
+USELOCALLIBRUA = no
+USELOCALLIBDCC = no
 
 # IP address of the dma-2500
 CLIENTIP=$(shell dig +short dma-2500 | awk '{ print ; exit }')

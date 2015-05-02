@@ -24,6 +24,12 @@ install: all
 run: all
 	$(MAKE) -C $(TESTPRG) run || exit 1; \
 
+debug: all
+	$(MAKE) -C $(TESTPRG) debug || exit 1; \
+
+gdb: all
+	$(MAKE) -C $(TESTPRG) gdb || exit 1; \
+
 clean:
 	for TEST in $(SAMPLES); do \
 		$(MAKE) -C $$TEST clean || exit 1; \

@@ -7,7 +7,7 @@
 
 SMPSDKBASE = ..
 
-LIB = $(SMPSDKBASE)/lib/libllad.so
+LIB = $(SMPSDKBASE)/libllad/libllad.so
 
 MODS += llad
 OBJS = $(addsuffix .o,$(MODS))
@@ -31,7 +31,6 @@ run: all
 all: $(LIB)
 
 $(LIB): $(OBJS)
-	mkdir -p $(SMPSDKBASE)/lib
 	$(CC) -shared -o $@ $^
 
 clean:

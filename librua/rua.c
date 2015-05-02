@@ -70,7 +70,50 @@ struct RUABufferPool {
 	enum RUAPoolDirection direction;
 };
 
+/** Set to 1 to enable debug output. */
 static int debug = 0;
+
+static char getPrintableChar(char c)
+{
+	if ((c >= 0x20) && (c <= 0x7e)) {
+		return c;
+	} else {
+		return '.';
+	}
+}
+
+static void hexdump(const uint8_t *data, int size, uint32_t offset)
+{
+	int i;
+
+	for (i = 0; i < size; i+=16) {
+		int n;
+
+		printf("%08x  ", offset + i);
+
+		for (n = 0; n < 16; n++) {
+			if ((i + n) < size) {
+				printf("%02x ", data[i + n]);
+			} else {
+				printf("  ");
+			}
+			if (n == 7) {
+				putchar(' ');
+			}
+		}
+		putchar(' ');
+		putchar('|');
+		for (n = 0; n < 16; n++) {
+			if ((i + n) < size) {
+				putchar(getPrintableChar(data[i + n]));
+			} else {
+				putchar(' ');
+			}
+		}
+		putchar('|');
+		putchar('\n');
+	}
+}
 
 #if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
 static int logdatafd = -1;
@@ -197,6 +240,10 @@ RMstatus RUASetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	buffer[1] = PropertyID;
 	buffer[2] = (RMuint32) pValue;
 	buffer[3] = ValueSize;
+
+	if (debug && (pValue != NULL)) {
+		hexdump(pValue, ValueSize, 0);
+	}
 	
 	rv = ioctl(pRua->fd, 0xc01c4501, buffer);
 	if (rv < 0) {
@@ -243,6 +290,9 @@ RMstatus RUAGetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 		if (rv == RM_OK) {
 			DPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) rv = RM_OK.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize);
+			if (debug && (pValue != NULL)) {
+				hexdump(pValue, ValueSize, 0);
+			}
 		} else {
 			EPRINTF("Failed RUAGetProperty(%p, %d, %d, %p, %d) rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
@@ -264,6 +314,10 @@ RMstatus RUAExchangeProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 	buffer[3] = ValueInSize;
 	buffer[4] = (RMuint32) pValueOut;
 	buffer[5] = ValueOutSize;
+
+	if (debug && (pValueIn != NULL)) {
+		hexdump(pValueIn, ValueInSize, 0);
+	}
 	
 	rv = ioctl(pRua->fd, 0xc01c4503, buffer);
 	if (rv < 0) {
@@ -274,6 +328,9 @@ RMstatus RUAExchangeProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 		if (rv == RM_OK) {
 			DPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) rv = RM_OK.\n",
 				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize);
+			if (debug && (pValueOut != NULL)) {
+				hexdump(pValueOut, ValueOutSize, 0);
+			}
 		} else {
 			EPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) rv = %d.\n",
 				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);

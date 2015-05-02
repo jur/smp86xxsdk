@@ -20,6 +20,9 @@
 #include "rua.h"
 #include "dcc.h"
 
+/** Define to play audio also. */
+#undef PLAY_AUDIO
+
 /** There is only one chip in the DMA-2500. */
 #define DEFAULT_CHIP 0
 /** DRAM can be 0 or 1. */
@@ -37,12 +40,16 @@ typedef struct {
 	struct RUABufferPool *pDMA;
 	struct DCCSTCSource *pStcSource;
 	struct DCCVideoSource *pVideoSource;
+#ifdef PLAY_AUDIO
 	struct DCCAudioSource *pAudioSource;
+#endif
 	RMuint32 SurfaceID;
 	RMuint32 video_decoder;
 	RMuint32 spu_decoder;
 	RMuint32 video_timer;
+#ifdef PLAY_AUDIO
 	RMuint32 audio_decoder; // AudioDecoder
+#endif
 	RMuint32 audio_engine; // AudioEngine
 	RMuint32 audio_timer; // 0
 } app_rua_context_t;
@@ -70,6 +77,7 @@ static void cleanup(app_rua_context_t *context)
 		context->pDMA = NULL;
 	}
 
+#ifdef PLAY_AUDIO
 	if (context->pAudioSource != NULL) {
 		rv = DCCCloseAudioSource(context->pAudioSource);
 		if (RMFAILED(rv)) {
@@ -77,6 +85,7 @@ static void cleanup(app_rua_context_t *context)
 		}
 		context->pAudioSource = NULL;
 	}
+#endif
 
 	if (context->pVideoSource != NULL) {
 		rv = DCCCloseVideoSource(context->pVideoSource);
@@ -156,8 +165,10 @@ static RMstatus configure_video(app_rua_context_t *context)
 	RMint32 video_delay_ms = 0;
 	RMint32 audio_delay_ms = 0;
 	struct DCCXVideoProfile video_profile;
+#ifdef PLAY_AUDIO
 	struct DCCAudioProfile audio_profile;
 	struct AudioDecoder_AACParameters_type aac_parameters;
+#endif
 
 	memset(&stc_profile, 0, sizeof(stc_profile));
 	stc_profile.STCID = 0;
@@ -225,6 +236,7 @@ static RMstatus configure_video(app_rua_context_t *context)
 		return rv;
 	}
 
+#ifdef PLAY_AUDIO
 	audio_profile.BitstreamFIFOSize = 1024 * 1024;
 	audio_profile.XferFIFOCount = 1024;
 	audio_profile.DemuxProgramID = 0;
@@ -266,6 +278,7 @@ static RMstatus configure_video(app_rua_context_t *context)
 		cleanup(context);
 		return rv;
 	}
+#endif
 
 	rv = DCCGetVideoDecoderSourceInfo(context->pVideoSource, &context->video_decoder, &context->spu_decoder, &context->video_timer);
 	if (RMFAILED(rv)) {
@@ -335,16 +348,18 @@ static RMstatus play_video(app_rua_context_t *context)
 {
 	RMstatus rv;
 	RMuint32 videotransferred;
-	RMuint32 audiotransferred;
 	int playing = 0;
 	RMuint64 time;
 	RMuint8 *videobuffer = NULL;
-	RMuint8 *audiobuffer = NULL;
 	RMuint32 videonumbuffers;
 	RMuint32 audionumbuffers;
+#ifdef PLAY_AUDIO
 	RMuint32 vafactor;
+	RMuint32 audiotransferred;
+	RMuint8 *audiobuffer = NULL;
 	RMuint32 vvalue;
 	RMuint32 avalue;
+#endif
 
 	rv = RUAOpenPool(context->pRUA, 0, 64, DMA_BUFFER_SIZE_LOG2, RUA_POOL_DIRECTION_SEND, &context->pDMA);
 	if (RMFAILED(rv)) {
@@ -414,12 +429,14 @@ static RMstatus play_video(app_rua_context_t *context)
 		return rv;
 	}
 
+#ifdef PLAY_AUDIO
 	rv = DCCPlayAudioSource(context->pAudioSource);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Cannot play video source, rv = %d\n", rv);
 		cleanup(context);
 		return rv;
 	}
+#endif
 
 	rv = DCCSTCGetTime(context->pStcSource, &time, 90000); // TBD Use this to synchronize?
 	if (RMFAILED(rv)) {
@@ -429,14 +446,18 @@ static RMstatus play_video(app_rua_context_t *context)
 	}
 
 	videotransferred = 0;
+#ifdef PLAY_AUDIO
 	audiotransferred = 0;
+#endif
 	videonumbuffers = videosize / DMA_BUFFER_SIZE;
 	audionumbuffers = audiosize / DMA_BUFFER_SIZE;
 
+#ifdef PLAY_AUDIO
 	/* Calculate how many bytes need to be transferred until the next audiodata can be transferred. */
 	vafactor = (((RMuint64) DMA_BUFFER_SIZE) * ((RMuint64) videosize)) / ((RMuint64) audiosize);
 	vvalue = 0;
 	avalue = 0;
+#endif
 	while (videotransferred < videosize) {
 		if (videotransferred < videosize) {
 			/* Send video stream data which should be played. */
@@ -445,6 +466,7 @@ static RMstatus play_video(app_rua_context_t *context)
 				return rv;
 			}
 		}
+#ifdef PLAY_AUDIO
 		if (audiotransferred < audiosize) {
 			/* Audio should not use all buffers, so only transfer audio when already enough video data were transferred. */
 			if (videotransferred >= vvalue) {
@@ -465,6 +487,7 @@ static RMstatus play_video(app_rua_context_t *context)
 				}
 			}
 		}
+#endif
 		if (!playing && (videotransferred > VID_PRE_BUFFER_SIZE)) {
 			printf("Start play\n");
 			rv = DCCSTCPlay(context->pStcSource);
@@ -479,6 +502,7 @@ static RMstatus play_video(app_rua_context_t *context)
 				cleanup(context);
 				return rv;
 			}
+#ifdef PLAY_AUDIO
 			/* TBD: Use DCCPlayMultipleAudioSource() instead. */
 			rv = DCCPlayAudioSource(context->pAudioSource);
 			if (RMFAILED(rv)) {
@@ -486,6 +510,7 @@ static RMstatus play_video(app_rua_context_t *context)
 				cleanup(context);
 				return rv;
 			}
+#endif
 			playing = 1;
 		}
 	}
@@ -506,12 +531,14 @@ static RMstatus play_video(app_rua_context_t *context)
 			cleanup(context);
 			return rv;
 		}
+#ifdef PLAY_AUDIO
 		rv = DCCStopAudioSource(context->pAudioSource);
 		if (RMFAILED(rv)) {
 			fprintf(stderr, "Cannot stop audio source, rv = %d\n", rv);
 			cleanup(context);
 			return rv;
 		}
+#endif
 		playing = 0;
 	}
 

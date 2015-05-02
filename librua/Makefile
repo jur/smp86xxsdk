@@ -7,7 +7,7 @@
 
 SMPSDKBASE = ..
 
-LIB = $(SMPSDKBASE)/lib/librua.so
+LIB = $(SMPSDKBASE)/librua/librua.so
 
 MODS += rua
 OBJS = $(addsuffix .o,$(MODS))
@@ -31,7 +31,6 @@ run: all
 all: $(LIB)
 
 $(LIB): $(OBJS)
-	mkdir -p $(SMPSDKBASE)/lib
 	$(CC) -shared -o $@ $^
 
 clean:

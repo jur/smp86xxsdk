@@ -62,6 +62,7 @@ typedef enum {
 	RMVideoDecoderPropertyID_State = 4109,
 	RMVideoDecoderPropertyID_DecoderDataMemory = 4133,
 	RMVideoDecoderPropertyID_DRAMSizeX = 4134,
+	RMVideoDecoderPropertyID_OpenX = 4135,
 	RMVideoDecoderPropertyID_CodecX = 4136,
 	RMVideoDecoderPropertyID_BtsFIFO = 4137,
 	RMVideoDecoderPropertyID_CommandStatus = 4140,
@@ -77,6 +78,7 @@ typedef enum {
 	RMSpuDecoderPropertyID_Close = 4349,
 	RMSpuDecoderPropertyID_Command = 4350,
 	RMSpuDecoderPropertyID_State = 4351,
+	RMSpuDecoderPropertyID_CodecX = 4355,
 
 	RMSTCPropertyID_Open = 4386,
 	RMSTCPropertyID_Close = 4389,
@@ -115,6 +117,7 @@ typedef enum {
 	RMGenericPropertyID_PersistentSurface = 6021,
 	RMGenericPropertyID_Stop = 6042,
 	RMGenericPropertyID_Flush = 6043,
+	RMGenericPropertyID_Step = 6044,
 	RMGenericPropertyID_SubPictureSurface = 6046,
 	RMGenericPropertyID_DisplayAspectRatio = 6065,
 	RMGenericPropertyID_MixerSourceIndex = 6067,

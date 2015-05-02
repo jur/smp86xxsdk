@@ -23,6 +23,18 @@ run:
 	$(MAKE) -C libdcc run
 	$(MAKE) -C samples run
 
+gdb:
+	$(MAKE) -C libllad run
+	$(MAKE) -C librua run
+	$(MAKE) -C libdcc run
+	$(MAKE) -C samples gdb
+
+debug:
+	$(MAKE) -C libllad run
+	$(MAKE) -C librua run
+	$(MAKE) -C libdcc run
+	$(MAKE) -C samples debug
+
 clean:
 	$(MAKE) -C libllad clean
 	$(MAKE) -C librua clean

@@ -9,6 +9,9 @@ IP=SERVERIP
 DEBUG=CONFIG_DEBUG
 PRG=PROGRAM
 LOCLIBS=USELOCALLIBS
+LOCLIBLLAD=USELOCALLIBLLAD
+LOCLIBRUA=USELOCALLIBRUA
+LOCLIBDCC=USELOCALLIBDCC
 
 cd /tmp || exit 1
 
@@ -16,18 +19,24 @@ rm -f "$PRG" || exit 1
 wget "http://$IP/dma-2500/$PRG" || exit 1
 chmod +x "$PRG" || exit 1
 
+rm -f libllad.so || exit 1
+rm -f librua.so || exit 1
+rm -f libdcc.so || exit 1
 if [ "$LOCLIBS" != "yes" ]; then
-	rm -f libllad.so || exit 1
-	wget "http://$IP/dma-2500/libllad.so" || exit 1
-	chmod +x "libllad.so" || exit 1
+	if [ "$LOCLIBLLAD" != "yes" ]; then
+		wget "http://$IP/dma-2500/libllad.so" || exit 1
+		chmod +x "libllad.so" || exit 1
+	fi
 	
-	rm -f librua.so || exit 1
-	wget "http://$IP/dma-2500/librua.so" || exit 1
-	chmod +x "librua.so" || exit 1
-	
-	rm -f libdcc.so || exit 1
-	wget "http://$IP/dma-2500/libdcc.so" || exit 1
-	chmod +x "libdcc.so" || exit 1
+	if [ "$LOCLIBRUA" != "yes" ]; then
+		wget "http://$IP/dma-2500/librua.so" || exit 1
+		chmod +x "librua.so" || exit 1
+	fi
+
+	if [ "$LOCLIBDCC" != "yes" ]; then
+		wget "http://$IP/dma-2500/libdcc.so" || exit 1
+		chmod +x "libdcc.so" || exit 1
+	fi
 fi
 
 if [ ! -e gdbserver ]; then

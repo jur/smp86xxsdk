@@ -26,16 +26,27 @@ MODS += oslayer
 LDLIBS += -ldcc
 LDLIBS += -lrua
 LDLIBS += -lllad
-
 OBJS = $(addsuffix .o,$(MODS))
 
 include $(SMPSDKBASE)/cross.mk
 include $(SMPSDKBASE)/config.mk
 
+ifneq ($(USELOCALLIBLLAD),yes)
+SMPSDKLIBDIRS += $(SMPSDKBASE)/libllad
+endif
+ifneq ($(USELOCALLIBRUA),yes)
+SMPSDKLIBDIRS += $(SMPSDKBASE)/librua
+endif
+ifneq ($(USELOCALLIBDCC),yes)
+SMPSDKLIBDIRS += $(SMPSDKBASE)/libdcc
+endif
+
 CPPFLAGS += -W -Wall -Werror-implicit-function-declaration
 CPPFLAGS += -g
 CPPFLAGS += -I$(SMPSDKBASE)/include
-LDFLAGS += -L$(SMPSDKBASE)/lib
+LDFLAGS += -L$(SMPSDKBASE)/libllad
+LDFLAGS += -L$(SMPSDKBASE)/librua
+LDFLAGS += -L$(SMPSDKBASE)/libdcc
 
 install: all $(AUDRAW) $(VIDRAW)
 	mkdir -p "$(WEBDIR)"
@@ -51,6 +62,9 @@ run: install
 		-e "s/CLIENTIP/CLIENTIP/g" \
 		-e "s/PROGRAM/$(PROGRAM)/g" \
 		-e "s/USELOCALLIBS/$(USELOCALLIBS)/g" \
+		-e "s/USELOCALLIBLLAD/$(USELOCALLIBLLAD)/g" \
+		-e "s/USELOCALLIBRUA/$(USELOCALLIBRUA)/g" \
+		-e "s/USELOCALLIBDCC/$(USELOCALLIBDCC)/g" \
 		-e "s/VIDRAW/$(VIDRAW)/g" \
 		-e "s/AUDRAW/$(AUDRAW)/g" \
 		<"run.sh" \
@@ -64,12 +78,16 @@ debug: install
 		-e "s/SERVERIP/$(SERVERIP)/g" \
 		-e "s/CLIENTIP/CLIENTIP/g" \
 		-e "s/PROGRAM/$(PROGRAM)/g" \
+		-e "s/USELOCALLIBS/$(USELOCALLIBS)/g" \
+		-e "s/USELOCALLIBLLAD/$(USELOCALLIBLLAD)/g" \
+		-e "s/USELOCALLIBRUA/$(USELOCALLIBRUA)/g" \
+		-e "s/USELOCALLIBDCC/$(USELOCALLIBDCC)/g" \
 		-e "s/VIDRAW/$(VIDRAW)/g" \
 		-e "s/AUDRAW/$(AUDRAW)/g" \
 		<"run.sh" \
 		>"$(WEBDIR)/run-$(PROGRAM).sh"
 	chmod +x "$(WEBDIR)/run-$(PROGRAM).sh"
-	dmarun.exp "http://$(SERVERIP)/dma-2500/run-$(PROGRAM).sh" "$(CLIENTIP)"
+	./dmarun.exp "http://$(SERVERIP)/dma-2500/run-$(PROGRAM).sh" "$(CLIENTIP)"
 
 gdb: debug.gdb
 	$(CROSS_COMPILE)gdb -nx -x debug.gdb $(PROGRAM)
@@ -80,7 +98,8 @@ all: $(PROGRAM)
 	sed >$@ <$< \
 		-e "s#\$$PREFIX#$(PREFIX)#g" \
 		-e "s#\$$CLIENTIP#$(CLIENTIP)#g" \
-		-e "s#\$$DMABASE#$(DMABASE)#g"
+		-e "s#\$$DMABASE#$(DMABASE)#g" \
+		-e "s#\$$SMPSDKLIBDIRS#$$(echo $(SMPSDKLIBDIRS) | tr ' ' ':')#g"
 
 $(PROGRAM): $(OBJS)
 
@@ -94,6 +113,6 @@ $(AUDRAW): $(VIDEOFILE)
 	$(FFMPEG) -i $^ -vn -sn -f adts -acodec copy $(DURATION) $@
 
 clean:
-	rm -f $(PROGRAM) $(OBJS) $(AUDRAW) $(VIDRAW)
+	rm -f $(PROGRAM) $(OBJS) $(AUDRAW) $(VIDRAW) debug.gdb
 
 .PHONY: install all run clean debug gdb

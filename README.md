@@ -67,11 +67,13 @@ will download a youtube video on the host and extracts the raw video and audio
 data. These will be copied ot the local web server /var/www and dowanloaded from
 the DMA-2500 to /usb/usb0/video. It can be tested with:
 * cd smp86xxsdk
-* make TESTPRG=playrawmp4 USELOCALLIBS=yes YOUTUBEID=HXOaeE6IMWA run
+* make TESTPRG=playrawmp4 USELOCALLIBS=no YOUTUBEID=HXOaeE6IMWA run
 * cd ..
 
 The sound is sometime not working. To ensure that will work you should play a
 mp4 file in the DMA-2500 using the offical software before running the test.
+Audio is disabled by default in the file samples/playrawmp4/playrawmp4.c. You
+need to to define PLAY_AUDIO to enable it.
 
 # Licence
 The library and the header files are GNU LGPL.
