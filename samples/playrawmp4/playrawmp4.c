@@ -33,6 +33,13 @@
 #define DMA_BUFFER_SIZE (1 << DMA_BUFFER_SIZE_LOG2)
 /** How many video stream data to buffer until playing should start. */
 #define VID_PRE_BUFFER_SIZE 48704
+/** Print debug message. */
+#define DPRINTF(args...) \
+	do { \
+		if (debug) { \
+			printf(args); \
+		} \
+	} while(0)
 
 typedef struct {
 	struct RUA *pRUA;
@@ -54,6 +61,8 @@ typedef struct {
 	RMuint32 audio_timer; // 0
 } app_rua_context_t;
 
+/** Set to 1 to enable debug output. */
+static int debug = 0;
 /** Raw video stream data. */
 static uint8_t *videodata;
 static size_t videosize;
@@ -308,8 +317,9 @@ static RMstatus transfer_data(app_rua_context_t *context, RMuint32 *transferred,
 		rv = RUAGetBuffer(context->pDMA, pbuffer, 0);
 		if (RMFAILED(rv)) {
 			*pbuffer = NULL;
-			fprintf(stderr, "Cannot get buffer, rv = %d\n", rv);
+			DPRINTF("Cannot get buffer, rv = %d\n", rv);
 			if (rv != RM_PENDING) {
+				fprintf(stderr, "Cannot get buffer, rv = %d\n", rv);
 				cleanup(context);
 			}
 			return rv;
@@ -318,9 +328,9 @@ static RMstatus transfer_data(app_rua_context_t *context, RMuint32 *transferred,
 	}
 
 	memset(&video_info, 0, sizeof(video_info));
-	printf("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u)\n", context->pRUA, (decoder >> 16) & 0xFF, decoder & 0xFF, context->pDMA, *pbuffer, size, &video_info, sizeof(video_info));
+	DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u)\n", context->pRUA, (decoder >> 16) & 0xFF, decoder & 0xFF, context->pDMA, *pbuffer, size, &video_info, sizeof(video_info));
 	rv = RUASendData(context->pRUA, decoder, context->pDMA, *pbuffer, size, &video_info, sizeof(video_info));
-	printf("RUASendData rv = %d\n", rv);
+	DPRINTF("RUASendData rv = %d\n", rv);
 	if (RMFAILED(rv)) {
 		if (rv != RM_PENDING) {
 			fprintf(stderr, "Cannot send buffer %p, rv = %d\n", *pbuffer, rv);
@@ -631,24 +641,24 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Error failed video_init! %d\n", rv);
 		return rv;
 	}
-	printf("video_init() success\n");
+	DPRINTF("video_init() success\n");
 
 	rv = configure_video(&context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed configure_video! %d\n", rv);
 		return rv;
 	}
-	printf("configure_video() success\n");
+	DPRINTF("configure_video() success\n");
 
 	rv = play_video(&context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed play_video! %d\n", rv);
 		return rv;
 	}
-	printf("play_video() success\n");
+	DPRINTF("play_video() success\n");
 
 	cleanup(&context);
-	printf("Clean up finished\n");
+	DPRINTF("Clean up finished\n");
 
 	return 0;
 }
