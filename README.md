@@ -73,7 +73,8 @@ the DMA-2500 to /usb/usb0/video. It can be tested with:
 The sound is sometime not working. To ensure that will work you should play a
 mp4 file in the DMA-2500 using the offical software before running the test.
 Audio is disabled by default in the file samples/playrawmp4/playrawmp4.c. You
-need to to define PLAY_AUDIO to enable it.
+need to to define PLAY_AUDIO to enable it. You need also to set
+USELOCALLIBLLAD=yes, because audio support is not yet implemented.
 
 # Licence
 The library and the header files are GNU LGPL.
