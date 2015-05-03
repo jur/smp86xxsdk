@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "rua.h"
 #include "dcc.h"
@@ -69,6 +70,8 @@ static size_t videosize;
 /** Raw audio stream data. */
 static uint8_t *audiodata;
 static size_t audiosize;
+static volatile int stopped = 0;
+static app_rua_context_t context_g;
 
 static void cleanup(app_rua_context_t *context)
 {
@@ -129,6 +132,27 @@ static void cleanup(app_rua_context_t *context)
 	}
 
 	fprintf(stderr, "end cleanup\n");
+}
+
+static void signalhandler(int sig)
+{
+	stopped = 1;
+}
+
+static void signalcleanup(int sig)
+{
+	printf("Signal %d received, cleanup.\n", sig);
+
+	exit(1);
+}
+
+static void exitcleanup(void)
+{
+	app_rua_context_t *context = &context_g;
+
+	printf("Cleanup at exit.\n");
+
+	cleanup(context);
 }
 
 static RMstatus video_init(app_rua_context_t *context)
@@ -370,6 +394,10 @@ static RMstatus play_video(app_rua_context_t *context)
 	RMuint32 vvalue;
 	RMuint32 avalue;
 #endif
+	if (stopped) {
+		printf("Received signal, stopping...\n");
+		return RM_OK;
+	}
 
 	rv = RUAOpenPool(context->pRUA, 0, 64, DMA_BUFFER_SIZE_LOG2, RUA_POOL_DIRECTION_SEND, &context->pDMA);
 	if (RMFAILED(rv)) {
@@ -469,6 +497,10 @@ static RMstatus play_video(app_rua_context_t *context)
 	avalue = 0;
 #endif
 	while (videotransferred < videosize) {
+		if (stopped) {
+			printf("Received signal, stopping...\n");
+			break;
+		}
 		if (videotransferred < videosize) {
 			/* Send video stream data which should be played. */
 			rv = transfer_data(context, &videotransferred, videodata, videosize, context->video_decoder, &videobuffer);
@@ -477,6 +509,10 @@ static RMstatus play_video(app_rua_context_t *context)
 			}
 		}
 #ifdef PLAY_AUDIO
+		if (stopped) {
+			printf("Received signal, stopping...\n");
+			break;
+		}
 		if (audiotransferred < audiosize) {
 			/* Audio should not use all buffers, so only transfer audio when already enough video data were transferred. */
 			if (videotransferred >= vvalue) {
@@ -498,6 +534,10 @@ static RMstatus play_video(app_rua_context_t *context)
 			}
 		}
 #endif
+		if (stopped) {
+			printf("Received signal, stopping...\n");
+			break;
+		}
 		if (!playing && (videotransferred > VID_PRE_BUFFER_SIZE)) {
 			printf("Start play\n");
 			rv = DCCSTCPlay(context->pStcSource);
@@ -525,8 +565,27 @@ static RMstatus play_video(app_rua_context_t *context)
 		}
 	}
 
+	if (videobuffer != NULL) {
+		rv = RUAReleaseBuffer(context->pDMA, videobuffer);
+		if (RMFAILED(rv)) {
+			fprintf(stderr, "Failed to release buffer, rv = %d\n", rv);
+		}
+		videobuffer = NULL;
+	}
+#ifdef PLAY_AUDIO
+	if (audiobuffer != NULL) {
+		rv = RUAReleaseBuffer(context->pDMA, audiobuffer);
+		if (RMFAILED(rv)) {
+			fprintf(stderr, "Failed to release buffer, rv = %d\n", rv);
+		}
+		audiobuffer = NULL;
+	}
+#endif
+
 	if (playing) {
-		usleep(30000000); /* TBD: Find a better way to detect if playing of the video finished. */
+		if (!stopped) {
+			usleep(30000000); /* TBD: Find a better way to detect if playing of the video finished. */
+		}
 
 		printf("Stop play\n");
 		rv = DCCSTCStop(context->pStcSource);
@@ -605,11 +664,11 @@ static void usage(char *argv[])
 
 int main(int argc, char *argv[])
 {
-	app_rua_context_t context;
 	RMstatus rv;
 	int ret;
 	const char *videofile;
 	const char *audiofile;
+	app_rua_context_t *context = &context_g;
 
 	if (argc < 2) {
 		fprintf(stderr, "Error: Paremeter missing.\n");
@@ -636,28 +695,44 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
-	rv = video_init(&context);
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGHUP, SIG_IGN);
+	signal(SIGSEGV, signalcleanup);
+	signal(SIGFPE, signalcleanup);
+	signal(SIGILL, signalcleanup);
+	signal(SIGABRT, signalcleanup);
+	signal(SIGBUS, signalcleanup);
+	signal(SIGQUIT, signalhandler);
+	signal(SIGINT, signalhandler);
+	signal(SIGUSR1, signalhandler);
+	signal(SIGUSR2, signalhandler);
+	signal(SIGKILL, signalhandler);
+	signal(SIGTERM, signalhandler);
+
+	atexit(exitcleanup);
+
+	rv = video_init(context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed video_init! %d\n", rv);
 		return rv;
 	}
 	DPRINTF("video_init() success\n");
 
-	rv = configure_video(&context);
+	rv = configure_video(context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed configure_video! %d\n", rv);
 		return rv;
 	}
 	DPRINTF("configure_video() success\n");
 
-	rv = play_video(&context);
+	rv = play_video(context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed play_video! %d\n", rv);
 		return rv;
 	}
 	DPRINTF("play_video() success\n");
 
-	cleanup(&context);
+	cleanup(context);
 	DPRINTF("Clean up finished\n");
 
 	return 0;

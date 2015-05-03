@@ -50,6 +50,8 @@ typedef enum {
 
 	RMDispVideoInputPropertyID_Close = 4055,
 
+	RMDispGraphicInputPropertyID_Close = 4063,
+
 	RMMpegEnginePropertyID_DecoderSharedMemory = 4101,
 	RMMpegEnginePropertyID_SchedulerSharedMemory = 4102,
 	RMMpegEnginePropertyID_ConnectedTaskCount = 4103,
@@ -71,8 +73,10 @@ typedef enum {
 	RMAudioEnginePropertyID_Volume = 4162,
 	RMAudioEnginePropertyID_DecoderSharedMemoryInfo = 4175,
 	RMAudioEnginePropertyID_DecoderSharedMemory = 4176,
+	RMAudioEnginePropertyID_ConnectedTaskCount = 4177,
 	RMAudioDecoderPropertyID_DRAMSize = 4187,
 	RMAudioDecoderPropertyID_Open = 4188,
+	RMAudioDecoderPropertyID_Close = 4191,
 	RMAudioDecoderPropertyID_Command = 4193,
 	RMAudioDecoderPropertyID_State = 4194,
 	RMAudioDecoderPropertyID_Codec = 4196,

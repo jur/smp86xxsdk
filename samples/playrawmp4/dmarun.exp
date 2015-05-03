@@ -27,7 +27,7 @@ expect -re "#"
 send "chmod +x run\n"
 expect -re "#"
 send "./run\n"
-set timeout -1
-expect -re "#"
-send "cat nohup.out\n"
+#set timeout -1
+#expect -re "#"
+#send "cat nohup.out\n"
 interact

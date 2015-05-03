@@ -74,7 +74,8 @@ fi
 if [ "$DEBUG" = "y" ]; then
 	./gdbserver CLIENTIP:1234 "./$PRG" "$VIDEOFILE" "$AUDIOFILE"
 else
-	rm nohup.out
-	touch nohup.out || exit 1
-	nohup "./$PRG" "$VIDEOFILE" "$AUDIOFILE"
+	#rm nohup.out
+	#touch nohup.out || exit 1
+	#nohup "./$PRG" "$VIDEOFILE" "$AUDIOFILE"
+	"./$PRG" "$VIDEOFILE" "$AUDIOFILE"
 fi

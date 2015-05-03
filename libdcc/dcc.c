@@ -117,6 +117,8 @@ struct DCCAudioSource {
 
 static RMuint32 default_rua_malloc(struct RUA *pRua, RMuint32 ModuleID, RMuint32 dramIndex, enum RUADramType dramtype, RMuint32 size)
 {
+	(void) ModuleID;
+
 	return RUAMalloc(pRua, dramIndex, dramtype, size);
 }
 
@@ -289,11 +291,15 @@ RMstatus DCCInitMicroCodeEx(struct DCC *pDCC, enum DCCInitMode init_mode)
 	return RM_OK;
 }
 
-static void get_event_mask(struct RUA *pRua, RMuint32 ModuleID, struct RUAEvent *evt)
+static void get_event_mask(RMuint32 ModuleID, struct RUAEvent *evt)
 {
 	evt->ModuleID = EMHWLIB_MODULE(DisplayBlock, 0);
 
 	switch(ModuleID & 0xFF) {
+		case DisplayBlock:
+			evt->Mask = 0;
+			break;
+
 		case DispOSDScaler:
 			evt->Mask = 0x100;
 			break;
@@ -441,7 +447,7 @@ static RMstatus set_property(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 	do {
 		struct RUAEvent evt;
 
-		get_event_mask(pRua, ModuleID, &evt);
+		get_event_mask(ModuleID, &evt);
 		if (evt.Mask != 0) {
 			rv = RUAResetEvent(pRua, &evt);
 			if (rv != RM_OK) {
@@ -638,9 +644,9 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 		pic->ChromaSize = pic_out[2];
 		pic->PaletteAddress = frameOut[2];
 		pic->PaletteSize = pic_out[3];
-		printf("LumaAddress 0x%08x\n", frameOut[0]);
-		printf("ChromaAddress 0x%08x\n", frameOut[1]);
-		printf("PaletteAddress 0x%08x\n", frameOut[2]);
+		DPRINTF("LumaAddress 0x%08x\n", frameOut[0]);
+		DPRINTF("ChromaAddress 0x%08x\n", frameOut[1]);
+		DPRINTF("PaletteAddress 0x%08x\n", frameOut[2]);
 
 		addr += pic_out[0]; // buffer size
 	}
@@ -1141,7 +1147,6 @@ RMstatus DCCGetVideoModuleIDsFromIndexes(struct DCC *pDCC, RMuint32 MpegEngineID
 	if (rv != RM_OK) {
 		return rv;
 	}
-	printf("number_of_engines %u\n", number_of_engines);
 	if (MpegEngineID >= number_of_engines) {
 		EPRINTF("MpegEngineID %u is larger or equal to %u.\n", MpegEngineID, number_of_engines);
 		return RM_PARAMETER_OUT_OF_RANGE;
@@ -1152,7 +1157,6 @@ RMstatus DCCGetVideoModuleIDsFromIndexes(struct DCC *pDCC, RMuint32 MpegEngineID
 	if (rv != RM_OK) {
 		return rv;
 	}
-	printf("number_of_decoders %u\n", number_of_decoders);
 	if (VideoDecoderID >= (number_of_decoders / number_of_engines)) {
 		EPRINTF("VideoDecoderID %u is larger or equal to %u.\n", VideoDecoderID, (number_of_decoders / number_of_engines));
 		return RM_PARAMETER_OUT_OF_RANGE;
@@ -1419,9 +1423,127 @@ RMstatus DCCXOpenVideoDecoderSource(struct DCC *pDCC, struct DCCXVideoProfile *d
 
 RMstatus DCCCloseVideoSource(struct DCCVideoSource *pVideoSource)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMstatus rv;
 
-	return RM_NOTIMPLEMENTED;
+	if (pVideoSource->spu_decoder != NULL) {
+		EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+		/* TBD: Implement SPUDisconnectSPUFromScaler(). */
+		return RM_NOTIMPLEMENTED;
+	} else if (pVideoSource->spudecodermoduleid != 0) {
+		EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+
+		return RM_NOTIMPLEMENTED;
+	}
+	if (pVideoSource->scalermoduleid != 0) {
+		RMuint32 surface;
+		rv = RUAGetProperty(pVideoSource->pRua, pVideoSource->scalermoduleid, RMGenericPropertyID_Surface, &surface, sizeof(surface));
+		if (rv != RM_OK) {
+			return rv;
+		}
+		if (surface != 0) {
+			surface = 0;
+			rv = set_property(pVideoSource->pRua, pVideoSource->scalermoduleid, RMGenericPropertyID_Surface, &surface, sizeof(surface));
+			if (rv != RM_OK) {
+				return rv;
+			}
+		}
+	}
+
+	// TBD: Implement SPU stuff.
+
+	if (pVideoSource->decodermoduleid != 0) {
+		RMuint32 buffer[1];
+		memset(buffer, 0, sizeof(buffer));
+
+		switch(pVideoSource->decodermoduleid & 0xFF) {
+			case DispVideoInput:
+				rv = set_property(pVideoSource->pRua, pVideoSource->decodermoduleid, RMDispVideoInputPropertyID_Close, &buffer, sizeof(buffer));
+				break;
+
+			case DispGraphicInput:
+				rv = set_property(pVideoSource->pRua, pVideoSource->decodermoduleid, RMDispGraphicInputPropertyID_Close, &buffer, sizeof(buffer));
+				break;
+
+			default:
+				rv = set_property(pVideoSource->pRua, pVideoSource->decodermoduleid, RMVideoDecoderPropertyID_Close, &buffer, sizeof(buffer));
+				break;
+		}
+		if (rv != RM_OK) {
+			return rv;
+		}
+	}
+
+	if (pVideoSource->picprot != 0) {
+		pVideoSource->pDCC->rua_free(pVideoSource->pRua, pVideoSource->picprot);
+		pVideoSource->picprot = 0;
+	}
+	if (pVideoSource->bitprot != 0) {
+		pVideoSource->pDCC->rua_free(pVideoSource->pRua, pVideoSource->bitprot);
+		pVideoSource->bitprot = 0;
+	}
+	if (pVideoSource->unprot != 0) {
+		pVideoSource->pDCC->rua_free(pVideoSource->pRua, pVideoSource->unprot);
+		pVideoSource->unprot = 0;
+	}
+	if (pVideoSource->enginemoduleid != 0) {
+		RMuint32 count;
+
+		rv = RUAGetProperty(pVideoSource->pRua, pVideoSource->enginemoduleid, RMMpegEnginePropertyID_ConnectedTaskCount, &count, sizeof(count));
+		if (rv != RM_OK) {
+			return rv;
+		}
+		if (count == 0) {
+			RMuint32 result_decmem[2];
+
+			rv = RUAGetProperty(pVideoSource->pRua, pVideoSource->enginemoduleid, RMMpegEnginePropertyID_DecoderSharedMemory, &result_decmem, sizeof(result_decmem));
+			if (rv != RM_OK) {
+				return rv;
+			}
+			if (result_decmem[0] != 0) {
+				RMuint32 address;
+
+				address = result_decmem[0];
+				result_decmem[0] = 0;
+				result_decmem[1] = 0;
+
+				rv = set_property(pVideoSource->pRua, pVideoSource->enginemoduleid, RMMpegEnginePropertyID_DecoderSharedMemory, &result_decmem, sizeof(result_decmem));
+				if (rv != RM_OK) {
+					return rv;
+				}
+
+				RUAFree(pVideoSource->pRua, address);
+			}
+
+			rv = RUAGetProperty(pVideoSource->pRua, pVideoSource->enginemoduleid, RMMpegEnginePropertyID_SchedulerSharedMemory, &result_decmem, sizeof(result_decmem));
+			if (rv != RM_OK) {
+				return rv;
+			}
+			if (result_decmem[0] != 0) {
+				RMuint32 address;
+
+				address = result_decmem[0];
+				result_decmem[0] = 0;
+				result_decmem[1] = 0;
+
+				rv = set_property(pVideoSource->pRua, pVideoSource->enginemoduleid, RMMpegEnginePropertyID_SchedulerSharedMemory, &result_decmem, sizeof(result_decmem));
+				if (rv != RM_OK) {
+					return rv;
+				}
+
+				rv = RUASetAddressID(pVideoSource->pRua, address, 0);
+				if (rv != RM_OK) {
+					return rv;
+				}
+
+				RUAFree(pVideoSource->pRua, address);
+			}
+		}
+	}
+	free(pVideoSource);
+	pVideoSource = NULL;
+
+	return RM_OK;
 }
 
 RMstatus DCCXSetVideoDecoderSourceCodec(struct DCCVideoSource *pVideoSource, enum EMhwlibVideoCodec Codec)
@@ -1535,21 +1657,21 @@ RMstatus DCCStopVideoSource(struct DCCVideoSource *pVideoSource, enum DCCStopMod
 
 		switch (stop_mode) {
 			case DCCStopMode_BlackFrame:
-				rv = set_property(pVideoSource->pRua, pVideoSource->scalermoduleid, RMGenericPropertyID_Flush, NULL, 0);
+				rv = set_property(pVideoSource->pRua, pVideoSource->scalermoduleid, RMGenericPropertyID_Stop, NULL, 0);
 				if (rv != RM_OK) {
 					return rv;
 				}
 				break;
 
 			case DCCStopMode_LastFrame:
-				rv = set_property(pVideoSource->pRua, pVideoSource->scalermoduleid, RMGenericPropertyID_Stop, NULL, 0);
+				rv = set_property(pVideoSource->pRua, pVideoSource->scalermoduleid, RMGenericPropertyID_Flush, NULL, 0);
 				if (rv != RM_OK) {
 					return rv;
 				}
 				break;
 		}
 		ModuleID = EMHWLIB_MODULE(DisplayBlock, 0);
-		get_event_mask(pVideoSource->pRua, ModuleID, &evt);
+		get_event_mask(pVideoSource->scalermoduleid, &evt);
 		if (evt.Mask != 0) {
 			rv = RUAResetEvent(pVideoSource->pRua, &evt);
 			if (rv != RM_OK) {
@@ -1673,9 +1795,53 @@ RMstatus DCCOpenAudioDecoderSource(struct DCC *pDCC, struct DCCAudioProfile *dcc
 
 RMstatus DCCCloseAudioSource(struct DCCAudioSource *pAudioSource)
 {
-	EPRINTF("Function %s is not implemented.\n", __FUNCTION__);
+	RMstatus rv;
+	RMuint32 buffer[1];
+	RMuint32 taskcount;
+	RMuint32 result_shm[2];
 
-	return RM_NOTIMPLEMENTED;
+	memset(buffer, 0, sizeof(buffer));
+	rv = set_property(pAudioSource->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_Close, &buffer, sizeof(buffer));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	rv = RUAGetProperty(pAudioSource->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_ConnectedTaskCount, &taskcount, sizeof(taskcount));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	rv = RUAGetProperty(pAudioSource->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_DecoderSharedMemory, &result_shm, sizeof(result_shm));
+	if (rv != RM_OK) {
+		return rv;
+	}
+	if ((result_shm[0] != 0) && (pAudioSource->reserved1C == 1)) {
+		RMuint32 address;
+
+		address = result_shm[0];
+
+		result_shm[0] = 0;
+		result_shm[1] = 0;
+		rv = set_property(pAudioSource->pRua, pAudioSource->enginemoduleid, RMAudioEnginePropertyID_DecoderSharedMemory, &result_shm, sizeof(result_shm));
+		if (rv != RM_OK) {
+			return rv;
+		}
+
+		rv = RUASetAddressID(pAudioSource->pRua, address, 0);
+		if (rv != RM_OK) {
+			return rv;
+		}
+		pAudioSource->pDCC->rua_free(pAudioSource->pRua, address);
+		pAudioSource->reserved1C = 0;
+	}
+	if (pAudioSource->mem1 != 0) {
+		pAudioSource->pDCC->rua_free(pAudioSource->pRua, pAudioSource->mem1);
+		pAudioSource->mem1 = 0;
+	}
+	if (pAudioSource->mem2 != 0) {
+		pAudioSource->pDCC->rua_free(pAudioSource->pRua, pAudioSource->mem2);
+		pAudioSource->mem2 = 0;
+	}
+
+	return RM_OK;
 }
 
 RMstatus DCCGetAudioDecoderSourceInfo(struct DCCAudioSource *pAudioSource, RMuint32 *decoder, RMuint32 *engine, RMuint32 *timer)
@@ -1778,15 +1944,11 @@ RMstatus DCCPlayAudioSource(struct DCCAudioSource *pAudioSource)
 
 RMstatus DCCPauseAudioSource(struct DCCAudioSource *pAudioSource)
 {
-	RMstatus rv;
-	
 	return send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 2);
 }
 
 RMstatus DCCStopAudioSource(struct DCCAudioSource *pAudioSource)
 {
-	RMstatus rv;
-	
 	return send_audio_command(pAudioSource->pRua, pAudioSource->decodermoduleid, 3);
 }
 
