@@ -9,9 +9,9 @@ I can't verify whether this is really compatible. I verified that it is
 compatible to examples which I found.
 
 # Status
-It is possible to use OSD (On Screen Display). Video and sound is not yet
-supported in the libraries. But when you use the local libraries from the
-DMA-2500, it is possible to play video and audio streams from a mp4 file.
+It is possible to use OSD (On Screen Display). Video and sound is working with
+raw streams which were extracted from a mp4 file. Some functions are not
+implemented, e.g. functions for several video and audio formats.
 
 # Toolchain
 You need a toolchain for building it, e.g.:
@@ -47,9 +47,6 @@ The video playback test needs the following configuration (default):
 * TESTPRG = playrawmp4
 * USELOCALLIBS = yes
 
-As there is no full support for video and audio in the libaries, you need to
-use the libraries which are installed on the DMA-2500.
-
 # Run Test
 You need first to boot the Zyxel DMA-2500 and connect it to the network. The
 test will login into the device and start the example program.
@@ -64,17 +61,14 @@ To run the test you need first to source the DMATOOLCHAIN.sh from the toolchain.
 
 For testing video playback, you need to connect a USB storage device. The test
 will download a youtube video on the host and extracts the raw video and audio
-data. These will be copied ot the local web server /var/www and dowanloaded from
+data. These will be copied ot the local web server /var/www and downloaded from
 the DMA-2500 to /usb/usb0/video. It can be tested with:
 * cd smp86xxsdk
 * make TESTPRG=playrawmp4 USELOCALLIBS=no YOUTUBEID=HXOaeE6IMWA run
 * cd ..
 
-The sound is sometime not working. To ensure that will work you should play a
+The sound is sometimes not working. To ensure that will work you should play a
 mp4 file in the DMA-2500 using the offical software before running the test.
-Audio is disabled by default in the file samples/playrawmp4/playrawmp4.c. You
-need to to define PLAY_AUDIO to enable it. You need also to set
-USELOCALLIBLLAD=yes, because audio support is not yet implemented.
 
 # Licence
 The library and the header files are GNU LGPL.
