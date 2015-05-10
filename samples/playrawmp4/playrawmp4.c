@@ -210,7 +210,7 @@ static RMstatus configure_video(app_rua_context_t *context)
 	stc_profile.stc_time_resolution = 90000;
 	stc_profile.video_timer_id = 3 * stc_profile.STCID + 1;
 	stc_profile.video_time_resolution = 90000;
-	stc_profile.video_offset = -(video_delay_ms * (RMint32)stc_profile.video_time_resolution / 1000);;
+	stc_profile.video_offset = -(video_delay_ms * (RMint32)stc_profile.video_time_resolution / 1000);
 	stc_profile.audio_timer_id = 3 * stc_profile.STCID + 2;
 	stc_profile.audio_time_resolution = 90000;
 	stc_profile.audio_offset = -(audio_delay_ms * (RMint32)stc_profile.audio_time_resolution / 1000);
@@ -670,7 +670,7 @@ int main(int argc, char *argv[])
 	const char *audiofile;
 	app_rua_context_t *context = &context_g;
 
-	if (argc < 2) {
+	if (argc < 3) {
 		fprintf(stderr, "Error: Paremeter missing.\n");
 
 		usage(argv);
