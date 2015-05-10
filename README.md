@@ -70,6 +70,12 @@ the DMA-2500 to /usb/usb0/video. It can be tested with:
 The sound is sometimes not working. To ensure that will work you should play a
 mp4 file in the DMA-2500 using the offical software before running the test.
 
+There is also an example for playing mp4 directly via http:
+* cd smp86xxsdk
+* make TESTPRG=playmp4 USELOCALLIBS=no YOUTUBEID=HXOaeE6IMWA run
+* cd ..
+
 # Licence
 The library and the header files are GNU LGPL.
-The sample code is BSD.
+The samples/playmp4 is GPL.
+Other sample code is BSD.

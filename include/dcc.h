@@ -31,6 +31,7 @@
 struct DCC;
 struct DCCVideoSource;
 struct DCCAudioSource;
+struct DCCDemuxTask;
 
 enum DCCRoute {
 	DCCRoute_Main = 0,
@@ -205,6 +206,44 @@ enum DCCStopMode {
 	DCCStopMode_LastFrame = 1,
 };
 
+struct DCCDemuxTaskProfile {
+	RMuint32 ProtectedFlags; // 0x00
+	RMuint32 BitstreamFIFOSize; // 0x04
+	RMuint32 XferFIFOCount; // 0x08
+	RMuint32 InbandFIFOCount; // 0x0c
+	RMuint32 InputPort; // 0x10
+	RMuint32 PrimaryMPM; // 0x14
+	RMuint32 SecondaryMPM; // 0x18
+	RMuint32 DemuxTaskID; // 0x1c
+	RMuint32 reserved20; // 0x20
+	RMuint32 reserved24; // 0x24
+	RMuint32 reserved28; // 0x28
+	RMuint32 reserved2c; // 0x2c
+};
+
+enum AudioOutputChannels_type {
+	Audio_Out_Ch_C = 1,
+	Audio_Out_Ch_LR = 2,
+	Audio_Out_Ch_LCR = 3,
+	Audio_Out_Ch_LRS = 18,
+	Audio_Out_Ch_LCRS = 19,
+	Audio_Out_Ch_LRLsRs = 34,
+	Audio_Out_Ch_LCRLsRs = 35,
+	Audio_Out_Ch_LCRLsRsSs = 99,
+	Audio_Out_Ch_LRLsRsLssRss = 162,
+	Audio_Out_Ch_LCRLsRsLssRss = 163,
+};
+
+struct AudioDecoder_MpegParameters_type {
+	enum OutputDualMode_type OutputDualMode;
+	RMbool Acmod2DualMode;
+	enum AudioOutputChannels_type OutputChannels;
+	RMbool OutputLfe;
+	enum AudioOutputSurround20_type OutputSurround20;
+	enum OutputSpdif_type OutputSpdif;
+	RMuint32 BassMode;
+};
+
 RMstatus DCCOpen(struct RUA *pRUA, struct DCC **ppDCC);
 RMstatus DCCClose(struct DCC *pDCC);
 RMstatus DCCInitMicroCodeEx(struct DCC *pDCC, enum DCCInitMode init_mode);
@@ -237,6 +276,7 @@ RMstatus DCCXSetVideoDecoderSourceCodec(struct DCCVideoSource *pVideoSource, enu
 RMstatus DCCGetVideoDecoderSourceInfo(struct DCCVideoSource *pVideoSource, RMuint32 *video_decoder, RMuint32 *spu_decoder, RMuint32 *timer);
 RMstatus DCCPlayVideoSource(struct DCCVideoSource *pVideoSource, enum DCCVideoPlayCommand cmd);
 RMstatus DCCStopVideoSource(struct DCCVideoSource *pVideoSource, enum DCCStopMode stop_mode);
+RMstatus DCCSetRouteDisplayAspectRatio(struct DCC *pDCC, enum DCCRoute route, RMuint8 ar_x, RMuint8 ar_y);
 
 RMstatus DCCOpenAudioDecoderSource(struct DCC *pDCC, struct DCCAudioProfile *dcc_profile, struct DCCAudioSource **ppAudioSource);
 RMstatus DCCCloseAudioSource(struct DCCAudioSource *pAudioSource);
@@ -247,5 +287,12 @@ RMstatus DCCPlayAudioSource(struct DCCAudioSource *pAudioSource);
 RMstatus DCCPauseAudioSource(struct DCCAudioSource *pAudioSource);
 RMstatus DCCStopAudioSource(struct DCCAudioSource *pAudioSource);
 RMstatus DCCSetAudioBtsThreshold(struct DCCAudioSource *pAudioSource, RMuint32 level);
+
+RMstatus DCCOpenDemuxTask(struct DCC *pDCC, struct DCCDemuxTaskProfile *dcc_profile, struct DCCDemuxTask **ppDemuxTask);
+RMstatus DCCCloseDemuxTask(struct DCCDemuxTask *pDemuxTask);
+RMstatus DCCSetAudioMpegFormat(struct DCCAudioSource *pAudioSource, struct AudioDecoder_MpegParameters_type *pFormat);
+RMstatus DCCPlayDemuxTask(struct DCCDemuxTask *pDemuxTask);
+RMstatus DCCStopDemuxTask(struct DCCDemuxTask *pDemuxTask);
+RMstatus DCCGetDemuxTaskInfo(struct DCCDemuxTask *pDemuxTask, RMuint32 *demux_task);
 
 #endif

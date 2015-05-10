@@ -9,7 +9,7 @@ SMPSDKBASE = ..
 
 include $(SMPSDKBASE)/config.mk
 
-SAMPLES = smptest playrawmp4
+SAMPLES = smptest playrawmp4 plaympeg playmp4
 
 all:
 	for TEST in $(SAMPLES); do \

@@ -6,5 +6,4 @@ break main
 cont
 clear main
 
-
 display/2i $pc

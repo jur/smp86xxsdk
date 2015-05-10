@@ -267,6 +267,8 @@ typedef enum {
 	ClosedCaptionDecoder = 35,
 	StreamCapture = 36,
 	STC = 42,
+	DemuxTask = 44,
+	DemuxOutput = 45,
 	DispVideoPlane = 50,
 	DispHDSDConverter = 51,
 } RMcategoryID;

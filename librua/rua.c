@@ -35,19 +35,35 @@
 /* Enable one of this to save first part of stream in a file. */
 #undef DEBUGAUDIOSTREAM
 #undef DEBUGVIDEOSTREAM
+#undef DEBUGDEMUXSTREAM
+
+#ifdef DEBUGAUDIOSTREAM
+#define LOGDATAFILE "/tmp/audiodat.bin"
+#endif
 
 #ifdef DEBUGVIDEOSTREAM
 #define LOGDATAFILE "/tmp/videodat.bin"
 #endif
 
-#ifdef DEBUGVIDEOSTREAM
-#define LOGDATAFILE "/tmp/audiodat.bin"
+#ifdef DEBUGDEMUXSTREAM
+#define LOGDATAFILE "/tmp/demux.bin"
 #endif
 
 /** Print debug message. */
 #define DPRINTF(args...) \
 	do { \
 		if (debug) { \
+			printf(args); \
+		} \
+	} while(0)
+
+/** Returns true when event should be traced. */
+#define TRACE_MODULE_ID(ID) (((ID) == DemuxOutput) || ((ID) == DemuxTask))
+
+/** Print trace message. */
+#define TPRINTF(ID, args...) \
+	do { \
+		if (debug || TRACE_MODULE_ID(ID)) { \
 			printf(args); \
 		} \
 	} while(0)
@@ -115,7 +131,7 @@ static void hexdump(const uint8_t *data, int size, uint32_t offset)
 	}
 }
 
-#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
+#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM) || defined(DEBUGDEMUXSTREAM)
 static int logdatafd = -1;
 static int logdatasize = 0;
 
@@ -241,24 +257,24 @@ RMstatus RUASetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	buffer[2] = (RMuint32) pValue;
 	buffer[3] = ValueSize;
 
-	if (debug && (pValue != NULL)) {
+	if ((debug || TRACE_MODULE_ID(ModuleID)) && (pValue != NULL)) {
 		hexdump(pValue, ValueSize, 0);
 	}
 	
 	rv = ioctl(pRua->fd, 0xc01c4501, buffer);
 	if (rv < 0) {
-		EPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) ioctl rv = %d.\n",
-			pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
+		EPRINTF("RUASetProperty(%p, 0x%08x (%u, %u), %d, %p, %d, %d) ioctl rv = %d.\n",
+			pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		return RM_ERROR;
 	}
 	rv = buffer[6];
 	if (rv != RM_PENDING) {
 		if (rv == RM_OK) {
-			DPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) rv = RM_OK.\n",
-				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us);
+			TPRINTF(ModuleID, "RUASetProperty(%p, 0x%08x (%u, %u), %d, %p, %d, %d) rv = RM_OK.\n",
+				pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValue, ValueSize, TimeOut_us);
 		} else {
-			EPRINTF("RUASetProperty(%p, %d, %d, %p, %d, %d) rv = %d.\n",
-				pRua, ModuleID, PropertyID, pValue, ValueSize, TimeOut_us, rv);
+			EPRINTF("RUASetProperty(%p, 0x%08x (%u, %u), %d, %p, %d, %d) rv = %d.\n",
+				pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValue, ValueSize, TimeOut_us, rv);
 		}
 		return rv;
 	}
@@ -283,19 +299,19 @@ RMstatus RUAGetProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 PropertyID
 	
 	rv = ioctl(pRua->fd, 0xc01c4502, buffer);
 	if (rv < 0) {
-		EPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) ioctl rv = %d.\n",
-			pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
+		EPRINTF("RUAGetProperty(%p, 0x%08x (%u, %u), %d, %p, %d) ioctl rv = %d.\n",
+			pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValue, ValueSize, rv);
 	} else {
 		rv = buffer[6];
 		if (rv == RM_OK) {
-			DPRINTF("RUAGetProperty(%p, %d, %d, %p, %d) rv = RM_OK.\n",
-				pRua, ModuleID, PropertyID, pValue, ValueSize);
-			if (debug && (pValue != NULL)) {
+			TPRINTF(ModuleID, "RUAGetProperty(%p, 0x%08x (%u, %u), %d, %p, %d) rv = RM_OK.\n",
+				pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValue, ValueSize);
+			if ((debug || TRACE_MODULE_ID(ModuleID)) && (pValue != NULL)) {
 				hexdump(pValue, ValueSize, 0);
 			}
 		} else {
-			EPRINTF("Failed RUAGetProperty(%p, %d, %d, %p, %d) rv = %d.\n",
-				pRua, ModuleID, PropertyID, pValue, ValueSize, rv);
+			EPRINTF("Failed RUAGetProperty(%p, 0x%08x (%u, %u), %d, %p, %d) rv = %d.\n",
+				pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValue, ValueSize, rv);
 		}
 		return rv;
 	}
@@ -315,25 +331,25 @@ RMstatus RUAExchangeProperty(struct RUA *pRua, RMuint32 ModuleID, RMuint32 Prope
 	buffer[4] = (RMuint32) pValueOut;
 	buffer[5] = ValueOutSize;
 
-	if (debug && (pValueIn != NULL)) {
+	if ((debug || TRACE_MODULE_ID(ModuleID)) && (pValueIn != NULL)) {
 		hexdump(pValueIn, ValueInSize, 0);
 	}
 	
 	rv = ioctl(pRua->fd, 0xc01c4503, buffer);
 	if (rv < 0) {
-		EPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) ioctl rv = %d.\n",
-			pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
+		EPRINTF("RUAExchangeProperty(%p, 0x%08x (%u, %u), %d, %p, %d, %p, %d) ioctl rv = %d.\n",
+			pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 	} else {
 		rv = buffer[6];
 		if (rv == RM_OK) {
-			DPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) rv = RM_OK.\n",
-				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize);
-			if (debug && (pValueOut != NULL)) {
+			TPRINTF(ModuleID, "RUAExchangeProperty(%p, 0x%08x (%u, %u), %d, %p, %d, %p, %d) rv = RM_OK.\n",
+				pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize);
+			if ((debug || TRACE_MODULE_ID(ModuleID)) && (pValueOut != NULL)) {
 				hexdump(pValueOut, ValueOutSize, 0);
 			}
 		} else {
-			EPRINTF("RUAExchangeProperty(%p, %d, %d, %p, %d, %p, %d) rv = %d.\n",
-				pRua, ModuleID, PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
+			EPRINTF("RUAExchangeProperty(%p, 0x%08x (%u, %u), %d, %p, %d, %p, %d) rv = %d.\n",
+				pRua, ModuleID, (ModuleID & 0xFF), ((ModuleID >> 8) & 0xFF), PropertyID, pValueIn, ValueInSize, pValueOut, ValueOutSize, rv);
 		}
 		return rv;
 	}
@@ -604,7 +620,7 @@ RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, 
 	struct RUABufferPool *pBufferPool;
 	RMuint32 modid = ModuleID | 0x80000000;
 
-#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
+#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM) || defined(DEBUGDEMUXSTREAM)
 	debug = 1;
 	logdata_open();
 #endif
@@ -647,7 +663,7 @@ RMstatus RUAOpenPool(struct RUA *pRua, RMuint32 ModuleID, RMuint32 BufferCount, 
 
 RMstatus RUAClosePool(struct RUABufferPool *pBufferPool)
 {
-#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM)
+#if defined(DEBUGVIDEOSTREAM) || defined(DEBUGAUDIOSTREAM) || defined(DEBUGDEMUXSTREAM)
 	logdata_close();
 #endif
 
@@ -730,10 +746,15 @@ RMstatus RUASendData(struct RUA *pRua, RMuint32 ModuleID, struct RUABufferPool *
 		DPRINTF("RUASendData(%p, (%u, %u), %p, %p, %u, %p, %u) rv = %d from dmapool_acquire()\n", pRua, (ModuleID >> 8) & 0xFF, ModuleID & 0xFF, pBufferPool, pData, DataSize, pInfo, InfoSize, rv);
 		return rv;
 	}
+#ifdef DEBUGDEMUXSTREAM
+if ((ModuleID & 0xFF) == DemuxTask) {
+	logdata_write(pData, DataSize);
+}
+#endif
 #ifdef DEBUGVIDEOSTREAM
-	if ((ModuleID & 0xFF) == VideoDecoder) {
-		logdata_write(pData, DataSize);
-	}
+if ((ModuleID & 0xFF) == VideoDecoder) {
+	logdata_write(pData, DataSize);
+}
 #endif
 #ifdef DEBUGAUDIOSTREAM
 	if ((ModuleID & 0xFF) == AudioDecoder) {

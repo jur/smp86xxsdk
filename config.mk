@@ -7,7 +7,9 @@
 # Simple OSD test
 #TESTPRG = smptest
 # Test needs a USB storage device at the DMA 2500.
-TESTPRG = playrawmp4
+TESTPRG = playmp4
+#TESTPRG = plaympeg
+#TESTPRG = playrawmp4
 
 # Install prefix:
 PREFIX ?= /usr/local
@@ -26,7 +28,9 @@ CLIENTIP=$(shell dig +short dma-2500 | awk '{ print ; exit }')
 SERVERIP=$(shell LANG=C ifconfig | awk -F':' '/inet addr/&&!/127.0.0.1/{split($$2,_," ");print _[1]}')
 
 # Install binaries to local web server:
-WEBDIR = /var/www/dma-2500/
+WEBBASE = dma-2500
+WEBDIR = /var/www/$(WEBBASE)
+WEBURLBASE = http://$(SERVERIP)/$(WEBBASE)
 
 # Video ID of youtube video which will be downloaded for the test:
 YOUTUBEID = HXOaeE6IMWA

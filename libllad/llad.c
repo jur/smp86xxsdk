@@ -243,6 +243,8 @@ RMuint8 *gbus_map_region(struct GBUS *pGbus, RMuint32 index, RMuint32 count)
 	RMuint32 freecount;
 	RMuint8 *ptr;
 
+	(void) count;
+
 	if (pGbus == NULL) {
 		return NULL;
 	}

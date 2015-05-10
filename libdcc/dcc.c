@@ -1957,6 +1957,48 @@ RMstatus DCCSetAudioBtsThreshold(struct DCCAudioSource *pAudioSource, RMuint32 l
 	return set_property(pAudioSource->pRua, pAudioSource->decodermoduleid, RMAudioDecoderPropertyID_AudioBtsThreshold, &level, sizeof(level));
 }
 
+RMstatus DCCOpenDemuxTask(struct DCC *pDCC, struct DCCDemuxTaskProfile *dcc_profile, struct DCCDemuxTask **ppDemuxTask)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCCloseDemuxTask(struct DCCDemuxTask *pDemuxTask)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSetAudioMpegFormat(struct DCCAudioSource *pAudioSource, struct AudioDecoder_MpegParameters_type *pFormat)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCPlayDemuxTask(struct DCCDemuxTask *pDemuxTask)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCStopDemuxTask(struct DCCDemuxTask *pDemuxTask)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCGetDemuxTaskInfo(struct DCCDemuxTask *pDemuxTask, RMuint32 *demux_task)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+RMstatus DCCSetRouteDisplayAspectRatio(struct DCC *pDCC, enum DCCRoute route, RMuint8 ar_x, RMuint8 ar_y)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
 void dontremovefunction(void)
 {
 	void *p;
