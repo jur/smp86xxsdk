@@ -3,8 +3,6 @@
 # All rights reserved.
 #
 
-.PHONY: install all clean
-
 SMPSDKBASE = ../..
 
 PROGRAM = playmp4
@@ -53,7 +51,11 @@ LDFLAGS += -L$(SMPSDKBASE)/libdcc
 
 all: $(PROGRAM)
 
-install: $(WEBDIR)/$(VIDEOFILE) $(WEBDIR)/$(PROGRAM) $(WEBDIR)/gdbserver
+install: all
+	mkdir -p $(BINDIR)
+	cp $(PROGRAM) $(BINDIR)
+
+install-web: $(WEBDIR)/$(VIDEOFILE) $(WEBDIR)/$(PROGRAM) $(WEBDIR)/gdbserver
 
 $(WEBDIR)/$(VIDEOFILE): $(VIDEOFILE)
 	mkdir -p "$(WEBDIR)"
@@ -67,7 +69,7 @@ $(WEBDIR)/gdbserver: $(SMP86XXBASE)/smp86xx_rootfs_2.8.2.0/build_mipsel/gdbserve
 	mkdir -p "$(WEBDIR)"
 	cp --preserve=timestamps $^ $@
 
-run: install
+run: install-web
 	sed \
 		-e "s/CONFIG_DEBUG/n/g" \
 		-e "s/SERVERIP/$(SERVERIP)/g" \
@@ -84,7 +86,7 @@ run: install
 	./dmarun.exp "http://$(SERVERIP)/dma-2500/run-$(PROGRAM).sh" "$(CLIENTIP)"
 VIDEOURL = "http://$(SERVERIP)/dma-2500/$(VIDEOFILE)"
 
-debug: install
+debug: install-web
 	sed \
 		-e "s/CONFIG_DEBUG/y/g" \
 		-e "s/SERVERIP/$(SERVERIP)/g" \
@@ -118,4 +120,4 @@ $(VIDEOFILE):
 clean:
 	rm -f $(PROGRAM) $(OBJS) debug.gdb
 
-.PHONY: install all run clean debug gdb
+.PHONY: install all run clean debug gdb install-web

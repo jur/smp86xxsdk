@@ -3,8 +3,6 @@
 # All rights reserved.
 #
 
-.PHONY: install all clean
-
 SMPSDKBASE = ../..
 
 PROGRAM = plaympeg
@@ -42,13 +40,17 @@ LDFLAGS += -L$(SMPSDKBASE)/libdcc
 
 all: $(PROGRAM)
 
-install: all $(VIDEOFILE)
+install: all
+	mkdir -p $(BINDIR)
+	cp $(PROGRAM) $(BINDIR)
+
+install-web: all $(VIDEOFILE)
 	mkdir -p "$(WEBDIR)"
 	cp "$(PROGRAM)" "$(WEBDIR)"
 	cp "$(VIDEOFILE)" "$(WEBDIR)"
 	cp "$(SMP86XXBASE)/smp86xx_rootfs_2.8.2.0/build_mipsel/gdbserver-6.5/gdbserver" "$(WEBDIR)"
 
-run: install
+run: install-web
 	sed \
 		-e "s/CONFIG_DEBUG/n/g" \
 		-e "s/SERVERIP/$(SERVERIP)/g" \
@@ -64,7 +66,7 @@ run: install
 	chmod +x "$(WEBDIR)/run-$(PROGRAM).sh"
 	./dmarun.exp "http://$(SERVERIP)/dma-2500/run-$(PROGRAM).sh" "$(CLIENTIP)"
 
-debug: install
+debug: install-web
 	sed \
 		-e "s/CONFIG_DEBUG/y/g" \
 		-e "s/SERVERIP/$(SERVERIP)/g" \
@@ -95,4 +97,4 @@ $(PROGRAM): $(OBJS)
 clean:
 	rm -f $(PROGRAM) $(OBJS) debug.gdb
 
-.PHONY: install all run clean debug gdb
+.PHONY: install all run clean debug gdb install-web

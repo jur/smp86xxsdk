@@ -15,6 +15,7 @@ TESTPRG = playmp4
 
 # Install prefix:
 PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/$(CROSS_COMPILE)bin
 
 # yes for using libraries installed on target, no for using the compiled libraries
 USELOCALLIBS = no
