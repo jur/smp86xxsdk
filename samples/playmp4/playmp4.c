@@ -600,8 +600,8 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		out_stream->codec->rc_buffer_size = in_stream->codec->rc_buffer_size;
 		out_stream->codec->field_order = in_stream->codec->field_order;
 		if (out_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-			RMstatus rv;
 #ifdef CONVERT_TIME
+			RMstatus rv;
 			RMuint32 timeres;
 #endif
 
@@ -623,8 +623,8 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 #endif
 
 		} else if (out_stream->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
-			RMstatus rv;
 #ifdef CONVERT_TIME
+			RMstatus rv;
 			RMuint32 timeres;
 #endif
 

@@ -24,7 +24,13 @@
 
 #define EMhwlibColorMode_TrueColor 5
 
+#define EMhwlibColorFormat_24BPP_565 1
+#define EMhwlibColorFormat_24BPP 2
+#define EMhwlibColorFormat_32BPP_4444 3
 #define EMhwlibColorFormat_32BPP 4
+#define EMhwlibColorFormat_16BPP_565 5
+#define EMhwlibColorFormat_16BPP_1555 6
+#define EMhwlibColorFormat_16BPP_4444 7
 
 #define EMhwlibColorSpace_RGB_0_255 3
 
@@ -243,6 +249,7 @@ struct AudioDecoder_MpegParameters_type {
 	enum OutputSpdif_type OutputSpdif;
 	RMuint32 BassMode;
 };
+
 
 RMstatus DCCOpen(struct RUA *pRUA, struct DCC **ppDCC);
 RMstatus DCCClose(struct DCC *pDCC);
