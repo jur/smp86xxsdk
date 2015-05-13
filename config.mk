@@ -3,6 +3,8 @@
 # All rights reserved.
 #
 
+CPPFLAGS += -std=c99 -Werror-implicit-function-declaration
+
 # Name of test to run:
 # Simple OSD test
 #TESTPRG = smptest

@@ -14,9 +14,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include "rua.h"
 #include "dcc.h"
@@ -136,6 +136,8 @@ static void cleanup(app_rua_context_t *context)
 
 static void signalhandler(int sig)
 {
+	(void) sig;
+
 	stopped = 1;
 }
 
@@ -584,7 +586,7 @@ static RMstatus play_video(app_rua_context_t *context)
 
 	if (playing) {
 		if (!stopped) {
-			usleep(30000000); /* TBD: Find a better way to detect if playing of the video finished. */
+			sleep(3); /* TBD: Find a better way to detect if playing of the video finished. */
 		}
 
 		printf("Stop play\n");
