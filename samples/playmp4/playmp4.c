@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/select.h>
 
 #include <stdio.h>
 #include <stdint.h>
@@ -59,6 +60,12 @@
 #define VIDEO_TIME_RES 30000
 #define STC_TIME_RES 24000
 
+#define IR_DEVICE "/dev/ir"
+
+#define RC_POWER 0xf50a4040
+#define RC_STOP 0xf7084040
+#define RC_OK 0xf20d4040
+
 typedef struct {
 	struct RUA *pRUA;
 	struct DCC *pDCC;
@@ -84,6 +91,7 @@ typedef struct {
 	int64_t last_time;
 	int playing;
 	volatile int stopped;
+	int irfd;
 } app_rua_context_t;
 
 /** Set to 1 to enable debug output. */
@@ -148,7 +156,47 @@ static void cleanup(app_rua_context_t *context)
 		}
 	}
 
+	if (context->irfd >= 0) {
+		close(context->irfd);
+		context->irfd = -1;
+	}
+
 	fprintf(stderr, "end cleanup\n");
+}
+
+static unsigned int get_key(app_rua_context_t *context)
+{
+	unsigned int key = 0;
+
+	if (context->irfd >= 0) {
+		fd_set rfds;
+		struct timeval tv;
+		int ret;
+
+		FD_ZERO(&rfds);
+		FD_SET(context->irfd, &rfds);
+		tv.tv_sec = 0;
+		tv.tv_usec = 0;
+
+		ret = select(context->irfd + 1, &rfds, NULL, NULL, &tv);
+		if (ret) {
+			ret = read(context->irfd, &key, sizeof(key));
+			if (ret != sizeof(key)) {
+				fprintf(stderr, "Failed to read " IR_DEVICE " ret = %d.\n", ret);
+			} else {
+				switch(key) {
+					case RC_POWER:
+					case RC_STOP:
+						context->stopped = 1;
+						break;
+					default:
+						break;
+				}
+			}
+		}
+	}
+
+	return key;
 }
 
 static void signalhandler(int sig)
@@ -695,6 +743,8 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		const char *type;
 		int64_t cur_time;
 
+		get_key(context);
+
 		if (context->stopped) {
 			printf("Received signal, stopping...\n");
 			break;
@@ -883,6 +933,8 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 	RMstatus rv;
 	int ret;
 
+	get_key(context);
+
 	if (context->stopped) {
 		printf("Received signal, stopping...\n");
 		return RM_OK;
@@ -995,6 +1047,7 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 					return rv;
 				}
 				printf("Current time %llu (%llus) waiting until %lld (%llds)\n", time, time / VIDEO_TIME_RES, context->last_time, context->last_time / VIDEO_TIME_RES);
+				get_key(context);
 				if (context->stopped) {
 					break;
 				}
@@ -1050,11 +1103,12 @@ int main(int argc, char *argv[])
 
 	avformat_network_init();
 
+
 	if (argc < 2) {
 		fprintf(stderr, "Error: Parameter missing.\n");
 
 		usage(argv);
-		exit(1);
+		return 1;
 	}
 	videofile = argv[1];
 
@@ -1081,9 +1135,17 @@ int main(int argc, char *argv[])
 	}
 	DPRINTF("video_init() success\n");
 
+	context->irfd = open(IR_DEVICE, O_RDONLY);
+	if (context->irfd < 0) {
+		perror("Failed to open " IR_DEVICE);
+		cleanup(context);
+		return 1;
+	}
+
 	rv = configure_video(context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed configure_video! %d\n", rv);
+		cleanup(context);
 		return rv;
 	}
 	DPRINTF("configure_video() success\n");
@@ -1091,6 +1153,7 @@ int main(int argc, char *argv[])
 	rv = play_video(context, videofile);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed play_video! %d\n", rv);
+		cleanup(context);
 		return rv;
 	}
 	DPRINTF("play_video() success\n");
