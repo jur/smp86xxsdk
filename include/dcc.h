@@ -260,7 +260,9 @@ RMstatus DCCGetScalerModuleID(struct DCC *pDCC, enum DCCRoute route, enum DCCSur
 RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDProfile *profile, RMuint32 picture_count, struct DCCVideoSource **ppVideoSource, struct DCCSTCSource *pStcSource);
 RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSource, struct DCCOSDProfile *profile, RMuint32 *SurfaceAddr, RMuint32 *SurfaceSize);
 RMstatus DCCGetOSDPictureInfo(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint32 *PictureAddr,  RMuint32 *LumaAddr, RMuint32 *LumaSize, RMuint32 *ChromaAddr, RMuint32 *ChromaSize);
+RMstatus DCCGetOSDVideoSourceInfo(struct DCCVideoSource *pVideoSource, RMuint32 *LumaAddr, RMuint32 *LumaSize, RMuint32 *ChromaAddr, RMuint32 *ChromaSize);
 RMstatus DCCClearOSDPicture(struct DCCVideoSource *pVideoSource, RMuint32 index);
+RMstatus DCCClearOSDVideoSource(struct DCCVideoSource *pVideoSource);
 RMstatus DCCInsertPictureInMultiplePictureOSDVideoSource(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint64 Pts);
 RMstatus DCCEnableVideoSource(struct DCCVideoSource *pVideoSource, RMbool enable);
 RMstatus DCCSetMemoryManager(struct DCC *pDCC, RMuint8 dram);

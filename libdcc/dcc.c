@@ -731,6 +731,11 @@ RMstatus DCCGetOSDPictureInfo(struct DCCVideoSource *pVideoSource, RMuint32 inde
 	return RM_OK;
 }
 
+RMstatus DCCGetOSDVideoSourceInfo(struct DCCVideoSource *pVideoSource, RMuint32 *LumaAddr, RMuint32 *LumaSize, RMuint32 *ChromaAddr, RMuint32 *ChromaSize)
+{
+	return DCCGetOSDPictureInfo(pVideoSource, 0 , NULL, LumaAddr, LumaSize, ChromaAddr, ChromaSize);
+}
+
 RMstatus DCCGetScalerModuleID(struct DCC *pDCC, enum DCCRoute route, enum DCCSurface surface, RMuint32 index, RMuint32 *scalermoduleid)
 {
 	if (pDCC == NULL) {
@@ -846,6 +851,11 @@ RMstatus DCCClearOSDPicture(struct DCCVideoSource *pVideoSource, RMuint32 index)
 	}
 
 	return RM_OK;
+}
+
+RMstatus DCCClearOSDVideoSource(struct DCCVideoSource *pVideoSource)
+{
+	return DCCClearOSDPicture(pVideoSource, 0);
 }
 
 RMstatus DCCInsertPictureInMultiplePictureOSDVideoSource(struct DCCVideoSource *pVideoSource, RMuint32 index, RMuint64 Pts)
