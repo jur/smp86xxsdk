@@ -21,8 +21,8 @@ CPPFLAGS += -fPIC
 CPPFLAGS += -I$(SMPSDKBASE)/include
 
 install: all
-	mkdir -p $(PREFIX)/lib
-	cp "$(LIB)" "$(PREFIX)/lib"
+	mkdir -p $(DESTDIR)$(PREFIX)/lib
+	cp $(LIB) $(DESTDIR)$(PREFIX)/lib
 
 run: all
 	mkdir -p "$(WEBDIR)"

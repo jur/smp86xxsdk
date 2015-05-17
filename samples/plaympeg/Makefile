@@ -41,8 +41,9 @@ LDFLAGS += -L$(SMPSDKBASE)/libdcc
 all: $(PROGRAM)
 
 install: all
-	mkdir -p $(BINDIR)
-	cp $(PROGRAM) $(BINDIR)
+	mkdir -p $(DESTDIR)$(BINDIR)
+	cp $(PROGRAM) $(DESTDIR)$(BINDIR)
+	$(STRIP) $(DESTDIR)$(BINDIR)/$(PROGRAM)
 
 install-web: all $(VIDEOFILE)
 	mkdir -p "$(WEBDIR)"
@@ -87,7 +88,7 @@ gdb: debug.gdb
 
 %.gdb: %.gdb.base
 	sed >$@ <$< \
-		-e "s#\$$PREFIX#$(PREFIX)#g" \
+		-e "s#\$$PREFIX#$(DESTDIR)$(PREFIX)#g" \
 		-e "s#\$$CLIENTIP#$(CLIENTIP)#g" \
 		-e "s#\$$DMABASE#$(DMABASE)#g" \
 		-e "s#\$$SMPSDKLIBDIRS#$$(echo $(SMPSDKLIBDIRS) | tr ' ' ':')#g"

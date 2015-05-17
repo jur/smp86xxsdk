@@ -19,8 +19,8 @@ CPPFLAGS += -fPIC
 CPPFLAGS += -I$(SMPSDKBASE)/include
 
 install: all
-	mkdir -p $(PREFIX)/lib
-	cp "$(OBJS)" "$(PREFIX)/lib"
+	mkdir -p $(DESTDIR)$(PREFIX)/lib
+	cp $(OBJS) $(DESTDIR)$(PREFIX)/lib
 
 run: all
 

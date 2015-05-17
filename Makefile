@@ -23,8 +23,8 @@ install: install-header
 	$(MAKE) -C samples install
 
 install-header: $(HEADERFILES)
-	mkdir -p $(PREFIX)/include
-	cp $(HEADERFILES) $(PREFIX)/include
+	mkdir -p $(DESTDIR)$(PREFIX)/include
+	cp $(HEADERFILES) $(DESTDIR)$(PREFIX)/include
 
 run:
 	$(MAKE) -C libllad run
