@@ -57,18 +57,23 @@ install: all
 	cp $(PROGRAM) $(DESTDIR)$(BINDIR)
 	$(STRIP) $(DESTDIR)$(BINDIR)/$(PROGRAM)
 
-install-web: $(WEBDIR)/$(VIDEOFILE) $(WEBDIR)/$(PROGRAM) $(WEBDIR)/gdbserver
+install-web: $(WEBDIR)/$(VIDEOFILE) $(WEBDIR)/$(PROGRAM) $(WEBDIR)/gdbserver $(WEBDIR)/libz.so.1.2.8
 
 $(WEBDIR)/$(VIDEOFILE): $(VIDEOFILE)
-	mkdir -p "$(WEBDIR)"
+	mkdir -p $(WEBDIR)
 	cp --preserve=timestamps $^ $@
 
 $(WEBDIR)/$(PROGRAM): $(PROGRAM)
-	mkdir -p "$(WEBDIR)"
+	mkdir -p $(WEBDIR)
 	cp --preserve=timestamps $^ $@
+	$(STRIP) $(WEBDIR)/$(PROGRAM)
 
 $(WEBDIR)/gdbserver: $(SMP86XXBASE)/smp86xx_rootfs_2.8.2.0/build_mipsel/gdbserver-6.5/gdbserver
-	mkdir -p "$(WEBDIR)"
+	mkdir -p $(WEBDIR)
+	cp --preserve=timestamps $^ $@
+
+$(WEBDIR)/libz.so.1.2.8: $(DESTDIR)$(PREFIX)/lib/libz.so.1.2.8
+	mkdir -p $(WEBDIR)
 	cp --preserve=timestamps $^ $@
 
 run: install-web

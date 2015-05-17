@@ -40,6 +40,14 @@ if [ "$LOCLIBS" != "yes" ]; then
 	fi
 fi
 
+if [ ! -e "/lib/libz.so.1.2.8" ]; then
+	cd /lib || exit 1
+	wget "http://$IP/dma-2500/libz.so.1.2.8" || exit 1
+	ln -s libz.so.1.2.8 libz.so.1
+	ln -s libz.so.1.2.8 libz.so
+	cd /tmp || exit 1
+fi
+
 if [ ! -e gdbserver ]; then
 	wget http://$IP/dma-2500/gdbserver || exit 1
 	chmod +x gdbserver || exit 1

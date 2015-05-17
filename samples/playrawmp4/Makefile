@@ -54,11 +54,12 @@ install: all
 	$(STRIP) $(DESTDIR)$(BINDIR)/$(PROGRAM)
 
 install-web: all $(AUDRAW) $(VIDRAW)
-	mkdir -p "$(WEBDIR)"
-	cp "$(PROGRAM)" "$(WEBDIR)"
-	cp "$(VIDRAW)" "$(WEBDIR)"
-	cp "$(AUDRAW)" "$(WEBDIR)"
-	cp "$(SMP86XXBASE)/smp86xx_rootfs_2.8.2.0/build_mipsel/gdbserver-6.5/gdbserver" "$(WEBDIR)"
+	mkdir -p $(WEBDIR)
+	cp $(PROGRAM) $(WEBDIR)
+	$(STRIP) $(WEBDIR)/$(PROGRAM)
+	cp $(VIDRAW) $(WEBDIR)
+	cp $(AUDRAW) $(WEBDIR)
+	cp $(SMP86XXBASE)/smp86xx_rootfs_2.8.2.0/build_mipsel/gdbserver-6.5/gdbserver $(WEBDIR)
 
 run: install-web
 	sed \
