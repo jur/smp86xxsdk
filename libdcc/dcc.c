@@ -665,6 +665,13 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 	return RM_OK;
 }
 
+RMstatus DCCOpenOSDVideoSource(struct DCC *pDCC, struct DCCOSDProfile *profile, struct DCCVideoSource **ppVideoSource)
+{
+	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
+	return RM_NOTIMPLEMENTED;
+}
+
+
 RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSource, struct DCCOSDProfile *profile, RMuint32 *SurfaceAddr, RMuint32 *SurfaceSize)
 {
 	if (pDCC == NULL) {
