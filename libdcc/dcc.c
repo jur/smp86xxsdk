@@ -667,10 +667,88 @@ RMstatus DCCOpenMultiplePictureOSDVideoSource(struct DCC *pDCC, struct DCCOSDPro
 
 RMstatus DCCOpenOSDVideoSource(struct DCC *pDCC, struct DCCOSDProfile *profile, struct DCCVideoSource **ppVideoSource)
 {
-	fprintf(stderr, "Error: %s is not implemented.\n", __FUNCTION__);
-	return RM_NOTIMPLEMENTED;
-}
+	struct DCCVideoSource *pVideoSource;
+	RMstatus rv;
+	RMuint32 pic_in[5];
+	RMuint32 pic_out[3];
+	RMuint32 buffer_init[11];
+	RMuint32 result_init[3];
+	RMuint32 addr;
+	pic_info_t *pic;
 
+	pVideoSource = malloc(sizeof(*pVideoSource));
+	if (pVideoSource == NULL) {
+		fprintf(stderr, "Error: out of memory\n");
+
+		return RM_FATALOUTOFMEMORY;
+	}
+	memset(pVideoSource, 0, sizeof(*pVideoSource));
+	pVideoSource->pRua = pDCC->pRua;
+	pVideoSource->pDCC = pDCC;
+	*ppVideoSource = pVideoSource;
+
+	memset(pic_in, 0, sizeof(pic_in));
+	memset(pic_out, 0, sizeof(pic_out));
+
+	pic_in[0] = profile->ColorMode;
+	pic_in[1] = profile->ColorFormat;
+	pic_in[2] = profile->SamplingMode;
+	pic_in[3] = profile->Width;
+	pic_in[4] = profile->Height;
+
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_SurfaceSize, &pic_in, sizeof(pic_in), &pic_out, sizeof(pic_out));
+	if (rv != RM_OK) {
+		fprintf(stderr, "Error: Failed to get surface size.\n");
+		return rv;
+	}
+	addr = pDCC->rua_malloc(pDCC->pRua, DisplayBlock, pDCC->dram, RUA_DRAM_UNPROTECTED, pic_out[0]);
+	if (addr == 0) {
+		fprintf(stderr, "Error: Failed to allocate memory.\n");
+		return RM_FATALOUTOFMEMORY;
+	}
+	pVideoSource->surface = addr;
+	pVideoSource->picture_count = 1;
+
+	memset(buffer_init, 0, sizeof(buffer_init));
+	memset(result_init, 0, sizeof(result_init));
+	buffer_init[0] = profile->ColorMode;
+	buffer_init[1] = profile->ColorFormat;
+	buffer_init[2] = profile->SamplingMode;
+	buffer_init[3] = profile->Width;
+	buffer_init[4] = profile->Height;
+	buffer_init[5] = addr;
+	buffer_init[6] = pic_out[1];
+	buffer_init[7] = pic_out[2];
+	buffer_init[8] = profile->ColorSpace;
+	buffer_init[9] = profile->PixelAspectRatio.X;
+	buffer_init[10] = profile->PixelAspectRatio.Y;
+	rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_InitSurface, &buffer_init, sizeof(buffer_init), &result_init, sizeof(result_init));
+	if (rv != RM_OK) {
+		fprintf(stderr, "Error: Failed to get nitialize surface.\n");
+		return rv;
+	}
+
+	pVideoSource->pic_info = malloc(sizeof(*pVideoSource->pic_info) * pVideoSource->picture_count);
+	if (pVideoSource->pic_info == NULL) {
+		free(pVideoSource);
+
+		fprintf(stderr, "Error: out of memory\n");
+
+		return RM_FATALOUTOFMEMORY;
+	}
+	memset(pVideoSource->pic_info, 0, sizeof(*pVideoSource->pic_info) * pVideoSource->picture_count);
+
+	pic = pVideoSource->pic_info;
+	pic->PictureAddr = addr;
+	pic->LumaAddress = result_init[0];
+	pic->LumaSize = pic_out[1];
+	pic->ChromaAddress = result_init[1];
+	pic->ChromaSize = pic_out[2];
+	pic->PaletteAddress = 0;
+	pic->PaletteSize = 0;
+
+	return RM_OK;
+}
 
 RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSource, struct DCCOSDProfile *profile, RMuint32 *SurfaceAddr, RMuint32 *SurfaceSize)
 {
@@ -699,7 +777,7 @@ RMstatus DCCGetOSDSurfaceInfo(struct DCC *pDCC, struct DCCVideoSource *pVideoSou
 
 		rv = RUAExchangeProperty(pDCC->pRua, EMHWLIB_MODULE(DisplayBlock, 0), RMDisplayBlockPropertyID_SurfaceSize, &pic_in, sizeof(pic_in), &pic_out, sizeof(pic_out));
 		if (rv != RM_OK) {
-			fprintf(stderr, "Error: Failed to set picture format.\n");
+			fprintf(stderr, "Error: Failed to get surface size.\n");
 			return rv;
 		}
 		*SurfaceSize = pic_out[0];

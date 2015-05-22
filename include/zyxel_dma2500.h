@@ -164,6 +164,7 @@ typedef enum {
 
 	RMAudioEnginePropertyID_BandwidthInit = 4640,
 
+	RMDisplayBlockPropertyID_InitSurface = 6001,
 	RMDisplayBlockPropertyID_InitMultiplePictureSurface = 6002,
 	RMDisplayBlockPropertyID_EnableGFXInteraction = 6009,
 
