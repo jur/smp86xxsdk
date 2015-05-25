@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <limits.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
@@ -43,7 +44,7 @@
 /** Size of buffers used to transfer audio and video data. */
 #define DMA_BUFFER_SIZE (1 << DMA_BUFFER_SIZE_LOG2)
 /** How many video stream data to buffer until playing should start. */
-#define VID_PRE_BUFFER_SIZE 48704
+//#define VID_PRE_BUFFER_SIZE 48704
 /** Print debug message. */
 #define DPRINTF(args...) \
 	do { \
@@ -53,13 +54,25 @@
 	} while(0)
 
 /** Number of ticks for 1 second audio. */
-#define AUDIO_TIME_RES 90000
-#define VIDEO_TIME_RES 30000
-#define STC_TIME_RES 24000
+#define AUDIO_TIME_RES 90000LL
+#define VIDEO_TIME_RES 30000LL
+#define STC_TIME_RES 24000LL
 #define MAX_SPEED 2
 #define MIN_SPEED -2
 /** Maximum time to buffer data when paused. */
 #define MAX_BUFFER_TIME (30 * VIDEO_TIME_RES)
+#define MIN_BUFFER_TIME (10 * VIDEO_TIME_RES)
+#define REBUFFER_TIME (1 * VIDEO_TIME_RES)
+#define JUMP_TIME 60
+
+typedef struct {
+	int64_t max_buffer_time;
+	int64_t min_buffer_time;
+	int64_t rebuffer_time;
+	int start_minute;
+	int start_second;
+	int jump_time;
+} play_config_t;
 
 typedef struct {
 	struct RUA *pRUA;
@@ -82,15 +95,40 @@ typedef struct {
 #endif
 	RMuint32 audio_engine;
 	RMuint32 audio_timer;
-	/** Last time buffered. */
-	int64_t last_time;
+	/** True when video engine plays video. */
 	int playing;
+	/** True when all data are transferred to the video engine. */
+	int ending;
 
 	/* Remote control */
 	volatile int stopped;
 	volatile int paused;
 	volatile int speed;
 	int irfd;
+
+	/** Video playback was started. */
+	int play_started;
+
+	/** Current time played */
+	RMuint64 time;
+	/** Last video ime buffered. */
+	int64_t last_time;
+	/** Current time buffered. */
+	int64_t cur_time;
+	/** Video should be started at this time (jump). */
+	int64_t startplaypts;
+	/** True when the player should jump to some position. */
+	int jump;
+	/** Time base of video. */
+	AVRational time_base;
+
+	/** PTS of first video frame. */
+	int64_t startpts;
+	/** Found first video frame which should be played after jump. */
+	int started;
+
+	/* Configuration parameters. */
+	play_config_t cfg;
 } app_rua_context_t;
 
 /** Set to 1 to enable debug output. */
@@ -178,12 +216,12 @@ static RMstatus set_speed(app_rua_context_t *context)
 	return DCCSTCSetSpeed(context->pStcSource, su, sd);
 }
 
-static unsigned int get_key(app_rua_context_t *context)
+static unsigned int get_key(app_rua_context_t *context, int usec)
 {
 	unsigned int key = 0;
 
 	if (context->irfd >= 0) {
-		key = RCCGetKey(context->irfd, 0);
+		key = RCCGetKey(context->irfd, usec);
 		switch(key) {
 			case RC_POWER:
 			case RC_STOP:
@@ -246,6 +284,22 @@ static unsigned int get_key(app_rua_context_t *context)
 				}
 				break;
 
+			case RC_UP:
+				if (context->playing) {
+					context->startplaypts =
+						context->time +
+						context->cfg.jump_time *
+						context->time_base.den/
+						context->time_base.num;
+					printf("Set startplaypts %s (%s) buffer until %s (%s)\n",
+						av_ts2timestr(context->startplaypts, &context->time_base),
+						av_ts2str(context->startplaypts),
+						av_ts2timestr(context->last_time, &context->time_base),
+						av_ts2str(context->last_time));
+					context->jump = 1;
+				}
+				break;
+
 			default:
 				break;
 		}
@@ -279,7 +333,7 @@ static void exitcleanup(void)
 	cleanup(context);
 }
 
-static RMstatus video_init(app_rua_context_t *context)
+static RMstatus video_init(app_rua_context_t *context, play_config_t *cfg)
 {
 	RMstatus rv;
 
@@ -313,6 +367,7 @@ static RMstatus video_init(app_rua_context_t *context)
 	}
 
 	context->speed = 0;
+	context->cfg = *cfg;
 
 	return RM_OK;
 }
@@ -505,6 +560,36 @@ static RMstatus transfer_data(app_rua_context_t *context, RMuint8 *data, RMuint3
 	}
 }
 
+static RMstatus start_play(app_rua_context_t *context)
+{
+	RMstatus rv;
+
+	printf("Start play\n");
+	rv = DCCSTCPlay(context->pStcSource);
+	if (RMFAILED(rv)) {
+		fprintf(stderr, "Cannot set play mode, rv = %d\n", rv);
+		return rv;
+	}
+	if (!context->play_started) {
+		rv = DCCPlayVideoSource(context->pVideoSource, DCCVideoPlayFwd);
+		if (RMFAILED(rv)) {
+			fprintf(stderr, "Cannot play video source, rv = %d\n", rv);
+			return rv;
+		}
+#ifdef PLAY_AUDIO
+		/* TBD: Use DCCPlayMultipleAudioSource() instead. */
+		rv = DCCPlayAudioSource(context->pAudioSource);
+		if (RMFAILED(rv)) {
+			fprintf(stderr, "Cannot play video source, rv = %d\n", rv);
+			return rv;
+		}
+#endif
+	}
+	context->playing = 1;
+	context->play_started = 1;
+	return RM_OK;
+}
+
 static int write_video_packet(void *opaque, uint8_t *buf, int buf_size)
 {
 	app_rua_context_t *context = opaque;
@@ -518,28 +603,15 @@ static int write_video_packet(void *opaque, uint8_t *buf, int buf_size)
 		return -1;
 	}
 	context->videotransferred += buf_size;
-	if (!context->playing && (context->videotransferred > VID_PRE_BUFFER_SIZE)) {
-		printf("Start play\n");
-		rv = DCCSTCPlay(context->pStcSource);
+#ifdef VID_PRE_BUFFER_SIZE
+	if (!context->play_started && (context->videotransferred > VID_PRE_BUFFER_SIZE)) {
+		rv = start_play(context);
 		if (RMFAILED(rv)) {
-			fprintf(stderr, "Cannot set play mode, rv = %d\n", rv);
+			fprintf(stderr, "Cannot start to play video, rv = %d\n", rv);
 			return -1;
 		}
-		rv = DCCPlayVideoSource(context->pVideoSource, DCCVideoPlayFwd);
-		if (RMFAILED(rv)) {
-			fprintf(stderr, "Cannot play video source, rv = %d\n", rv);
-			return -1;
-		}
-#ifdef PLAY_AUDIO
-		/* TBD: Use DCCPlayMultipleAudioSource() instead. */
-		rv = DCCPlayAudioSource(context->pAudioSource);
-		if (RMFAILED(rv)) {
-			fprintf(stderr, "Cannot play video source, rv = %d\n", rv);
-			return -1;
-		}
-#endif
-		context->playing = 1;
 	}
+#endif
 
 	return buf_size;
 }
@@ -550,6 +622,7 @@ static int write_audio_packet(void *opaque, uint8_t *buf, int buf_size)
 	app_rua_context_t *context = opaque;
 	RMstatus rv;
 	RMuint32 bufpos = 0;
+	int printed = 0;
 
 	do {
 		rv = transfer_data(context, buf, buf_size, context->audio_decoder, &context->audiobuffer, &bufpos);
@@ -559,8 +632,11 @@ static int write_audio_packet(void *opaque, uint8_t *buf, int buf_size)
 				return -1;
 			}
 			if (context->paused) {
-				fprintf(stderr, "Buffer overrun while pausing.\n");
-				get_key(context);
+				if (!printed) {
+					fprintf(stderr, "Buffer overrun while pausing.\n");
+					printed = 1;
+				}
+				get_key(context, 10000);
 			}
 		}
 	} while (rv == RM_PENDING);
@@ -578,14 +654,50 @@ static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt,
 {
 	AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
 
-	printf
-		("%s:%s: pts:%llu %s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
+	printf("%s:%s: pts:%llu %s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
 		tag, type, pkt->pts, av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
 		av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
 		av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
 		pkt->stream_index);
 }
 #endif
+
+static RMstatus check_jump(app_rua_context_t *context)
+{
+	RMstatus rv;
+
+	if (!context->started || context->jump) {
+		if ((context->startplaypts == 0) || (context->cur_time >= (context->startplaypts - context->startpts))) {
+			printf("start_time %s %lld (%llds)\n", av_ts2timestr(context->startplaypts, &context->time_base), context->startplaypts, context->startplaypts/VIDEO_TIME_RES);
+			if (context->started) {
+				if ((context->last_time > 0)
+					&& (((uint64_t) context->last_time) > (context->time + context->cfg.min_buffer_time))) {
+					if (context->playing) {
+						if (!context->paused && !context->ending) {
+							printf("Stop play\n");
+							rv = DCCSTCStop(context->pStcSource);
+							if (RMFAILED(rv)) {
+								fprintf(stderr, "Cannot stop, rv = %d\n", rv);
+								cleanup(context);
+								return rv;
+							}
+						} else {
+							context->paused = 0;
+						}
+						context->playing = 0;
+					}
+				}
+			}
+			rv = DCCSTCSetTime(context->pStcSource, context->startplaypts, VIDEO_TIME_RES);
+			if (RMFAILED(rv)) {
+				fprintf(stderr, "Cannot set time, rv = %d\n", rv);
+			}
+			context->started = 1;
+			context->jump = 0;
+		}
+	}
+	return RM_OK;
+}
 
 /**
  * Play mp4 video
@@ -612,17 +724,17 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 	unsigned int i;
 	int buffersize = DMA_BUFFER_SIZE;
 	int *streamidxmap = NULL;
-	AVRational time_base;
-	int64_t startpts = LLONG_MAX;
-	int64_t startplaypts;
 	int64_t print_time;
-	int started = 0;
 
-	time_base.num = 1;
-	time_base.den = VIDEO_TIME_RES;
+	context->time_base.num = 1;
+	context->time_base.den = VIDEO_TIME_RES;
+	context->startpts = LLONG_MAX;
+	context->started = 0;
+
+	context->last_time = -1;
 
 	/* Start at a specific time to play. */
-	startplaypts = ((minutes * 60) + seconds) * time_base.den/time_base.num;
+	context->startplaypts = ((minutes * 60) + seconds) * context->time_base.den/context->time_base.num;
 
 	context->videobuffer = NULL;
 	context->videotransferred = 0;
@@ -808,17 +920,18 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		AVStream *in_stream, *out_stream;
 		AVFormatContext *ofmt_ctx;
 		const char *type;
-		int64_t cur_time;
 		RMstatus rv;
+#ifdef TIMEDEBUG
 		RMuint64 time;
+#endif
 
-		get_key(context);
+		get_key(context, 0);
 
 		if (context->stopped) {
 			printf("Received signal, stopping...\n");
 			break;
 		}
-		rv = DCCSTCGetTime(context->pStcSource, &time, VIDEO_TIME_RES);
+		rv = DCCSTCGetTime(context->pStcSource, &context->time, VIDEO_TIME_RES);
 		if (RMFAILED(rv)) {
 			fprintf(stderr, "Cannot get time, rv = %d\n", rv);
 			cleanup(context);
@@ -826,9 +939,34 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		}
 		if (context->paused) {
 			if ((context->last_time > 0)
-				&& (((uint64_t) context->last_time) > (time + MAX_BUFFER_TIME))) {
+				&& (((uint64_t) context->last_time) > (context->time + context->cfg.max_buffer_time))) {
 				/* Wait until stuff is played. */
 				continue;
+			}
+		}
+		if (context->started && !context->playing) {
+			/* Wait until enough frames are buffered then start playing. */
+			if ((context->last_time > 0)
+				&& (((uint64_t) context->last_time) > (context->time + context->cfg.min_buffer_time))) {
+				rv = start_play(context);
+				if (RMFAILED(rv)) {
+					fprintf(stderr, "Cannot start to play video, rv = %d\n", rv);
+					cleanup(context);
+					return rv;
+				}
+			}
+		}
+		if (context->playing) {
+			if ((context->last_time > 0)
+				&& (((uint64_t) context->last_time) < (context->time + context->cfg.rebuffer_time))) {
+				printf("Rebuffering...\n");
+				rv = DCCSTCStop(context->pStcSource);
+				if (RMFAILED(rv)) {
+					fprintf(stderr, "Cannot stop video, rv = %d\n", rv);
+					cleanup(context);
+					return rv;
+				}
+				context->playing = 0;
 			}
 		}
 
@@ -879,9 +1017,9 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		pkt.pos = -1;
 
 		if ((in_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) && (bsf != NULL)) {
-			if (pkt.pts < startpts) {
+			if (pkt.pts < context->startpts) {
 				if (!context->playing) {
-					startpts = pkt.pts;
+					context->startpts = pkt.pts;
 				}
 			}
 		}
@@ -889,7 +1027,7 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		if ((in_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) && (bsf != NULL)) {
 			AVPacket new_pkt = pkt;
 
-			context->last_time = av_rescale_q(pkt.pts + pkt.duration, out_stream->time_base, time_base);
+			context->last_time = av_rescale_q(pkt.pts + pkt.duration, out_stream->time_base, context->time_base);
 #ifdef TIMEDEBUG
 			printf("last_time %lld (%llds)\n", context->last_time, context->last_time/VIDEO_TIME_RES);
 #endif
@@ -923,33 +1061,27 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 #ifdef TIMEDEBUG
 		log_packet(ofmt_ctx, &pkt, "out", type);
 #endif
-		cur_time = av_rescale_q(pkt.pts, out_stream->time_base, time_base);
+		context->cur_time = av_rescale_q(pkt.pts, out_stream->time_base, context->time_base);
 		if (in_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-			if ((print_time + 30 * time_base.den/time_base.num) <= cur_time) {
-				printf("cur_time %s\n", av_ts2timestr(cur_time, &time_base));
-				print_time = cur_time;
+			if ((print_time + 30 * context->time_base.den/context->time_base.num) <= context->cur_time) {
+				printf("cur_time %s (%s) startplaypts %s (%s) buffer until %s (%s) started %d\n",
+					av_ts2timestr(context->cur_time, &context->time_base),
+					av_ts2str(context->cur_time),
+					av_ts2timestr(context->startplaypts, &context->time_base),
+					av_ts2str(context->startplaypts),
+					av_ts2timestr(context->last_time, &context->time_base),
+					av_ts2str(context->last_time),
+					context->started);
+				print_time = context->cur_time;
 			}
 		}
-		if (!started) {
-			if ((startplaypts == 0) || (in_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO)) {
-				if ((startplaypts == 0) || (pkt.pts >= startplaypts)) {
-					int64_t start_time;
-
-					start_time = av_rescale_q(startpts, out_stream->time_base, time_base);
-					if (start_time >= 0) {
-						printf("start_time %s %lld (%llds)\n", av_ts2timestr(start_time, &time_base), start_time, start_time/VIDEO_TIME_RES);
-						rv = DCCSTCSetTime(context->pStcSource, start_time, VIDEO_TIME_RES);
-						if (RMFAILED(rv)) {
-							fprintf(stderr, "Cannot set time, rv = %d\n", rv);
-						}
-						started = 1;
-					} else {
-						printf("bad start_time %s %lld (%llds) orig %lld %s\n", av_ts2timestr(start_time, &time_base), start_time, start_time/VIDEO_TIME_RES, startpts, av_ts2timestr(startpts, &out_stream->time_base));
-					}
-				}
+		if ((context->startplaypts == 0) || (in_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO)) {
+			rv = check_jump(context);
+			if (RMFAILED(rv)) {
+				return rv;
 			}
 		}
-		if (started) {
+		if (context->started) {
 			ret = av_interleaved_write_frame(ofmt_ctx, &pkt);
 			if (ret < 0) {
 				fprintf(stderr, "Error muxing packet\n");
@@ -962,6 +1094,20 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 #ifdef PLAY_AUDIO
 	av_write_trailer(audfmt_ctx);
 #endif
+	if (context->started && !context->play_started) {
+		/* Wait until enough frames are buffered then start playing. */
+		if (context->last_time > 0) {
+			RMstatus rv;
+
+			printf("Playing very small video.\n");
+			rv = start_play(context);
+			if (RMFAILED(rv)) {
+				fprintf(stderr, "Cannot start to play video, rv = %d\n", rv);
+				cleanup(context);
+				return rv;
+			}
+		}
+	}
 end:
 	if (ifmt_ctx != NULL) {
 		avformat_close_input(&ifmt_ctx);
@@ -1011,7 +1157,8 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 	RMstatus rv;
 	int ret;
 
-	get_key(context);
+	get_key(context, 0);
+	context->ending = 0;
 
 	if (context->stopped) {
 		printf("Received signal, stopping...\n");
@@ -1090,7 +1237,7 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 	}
 #endif
 
-	ret = play_mp4_video(context, videofile, 0, 0);
+	ret = play_mp4_video(context, videofile, context->cfg.start_minute, context->cfg.start_second);
 	if (ret != 0) {
 		fprintf(stderr, "Failed play_mp4_video with %d\n", ret);
 	}
@@ -1111,26 +1258,33 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 		context->audiobuffer = NULL;
 	}
 #endif
+	context->ending = 1;
+	context->cur_time = context->last_time;
 
 	if (context->playing) {
 		if ((ret == 0) && !context->stopped) {
 			printf("All data buffered, waiting until playing finished at %lld (%llds)\n", context->last_time, context->last_time / VIDEO_TIME_RES);
-			RMuint64 time;
 
 			do {
-				rv = DCCSTCGetTime(context->pStcSource, &time, VIDEO_TIME_RES);
+				rv = check_jump(context);
+				if (RMFAILED(rv)) {
+					fprintf(stderr, "Failed jump, rv = %d\n", rv);
+					cleanup(context);
+					return rv;
+				}
+
+				rv = DCCSTCGetTime(context->pStcSource, &context->time, VIDEO_TIME_RES);
 				if (RMFAILED(rv)) {
 					fprintf(stderr, "Cannot get time, rv = %d\n", rv);
 					cleanup(context);
 					return rv;
 				}
-				printf("Current time %llu (%llus) waiting until %lld (%llds)\n", time, time / VIDEO_TIME_RES, context->last_time, context->last_time / VIDEO_TIME_RES);
-				get_key(context);
+				printf("Current time %llu (%llus) waiting until %lld (%llds)\n", context->time, context->time / VIDEO_TIME_RES, context->last_time, context->last_time / VIDEO_TIME_RES);
+				get_key(context, 500000);
 				if (context->stopped) {
 					break;
 				}
-				sleep(1);
-			} while((context->last_time > 0) && (((RMuint64) context->last_time) >= time));
+			} while((context->last_time > 0) && (((RMuint64) context->last_time) >= context->time));
 		}
 
 		if (!context->paused) {
@@ -1169,9 +1323,18 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 
 static void usage(char *argv[])
 {
-	fprintf(stderr, "%s [video file]\n", argv[0]);
+	fprintf(stderr, "%s [OPTION] [video file]\n", argv[0]);
+	fprintf(stderr, "\n");
+	fprintf(stderr, "-x MAX_BUFFER_TIME    default: %lld\n", MAX_BUFFER_TIME);
+	fprintf(stderr, "-m MIN_BUFFER_TIME    default: %lld\n", MIN_BUFFER_TIME);
+	fprintf(stderr, "-r REBUFFER_TIME      default: %lld\n", REBUFFER_TIME);
+	fprintf(stderr, "-M MINUTE             Minute were to start playing\n");
+	fprintf(stderr, "-S SECOND             Second were to start playing\n");
+	fprintf(stderr, "-d                    Enable debug output\n");
+	fprintf(stderr, "-j SECOND             How much to jump in seconds\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "This program plays mp4 videos on the Zyxel DMA-2500.\n");
+	fprintf(stderr, "Time: %lld is 1 second.\n", VIDEO_TIME_RES);
 	fprintf(stderr, "\n");
 }
 
@@ -1180,17 +1343,62 @@ int main(int argc, char *argv[])
 	RMstatus rv;
 	const char *videofile;
 	app_rua_context_t *context = &context_g;
+	int c;
+	play_config_t cfg;
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.max_buffer_time = MAX_BUFFER_TIME;
+	cfg.min_buffer_time = MIN_BUFFER_TIME;
+	cfg.rebuffer_time = REBUFFER_TIME;
+	cfg.start_minute = 0;
+	cfg.start_second = 0;
+	cfg.jump_time = JUMP_TIME;
 
 	avformat_network_init();
 
+	while((c = getopt (argc, argv, "x:m:r:S:M:dj:")) != -1) {
+		switch(c) {
+			case 'x':
+				cfg.max_buffer_time = strtoull(optarg, NULL, 0);
+				break;
 
-	if (argc < 2) {
+			case 'm':
+				cfg.min_buffer_time = strtoull(optarg, NULL, 0);
+				break;
+
+			case 'r':
+				cfg.rebuffer_time = strtoull(optarg, NULL, 0);
+				break;
+
+			case 'S':
+				cfg.start_second = strtoul(optarg, NULL, 0);
+				break;
+
+			case 'M':
+				cfg.start_minute = strtoul(optarg, NULL, 0);
+				break;
+
+			case 'j':
+				cfg.jump_time = strtoul(optarg, NULL, 0);
+				break;
+
+			case 'd':
+				debug = 1;
+				break;
+
+			default:
+				usage(argv);
+				return 1;
+		}
+	}
+
+	if (optind >= argc) {
 		fprintf(stderr, "Error: Parameter missing.\n");
 
 		usage(argv);
 		return 1;
 	}
-	videofile = argv[1];
+	videofile = argv[optind];
 
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGHUP, SIG_IGN);
@@ -1208,7 +1416,7 @@ int main(int argc, char *argv[])
 
 	atexit(exitcleanup);
 
-	rv = video_init(context);
+	rv = video_init(context, &cfg);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Error failed video_init! %d\n", rv);
 		return rv;
