@@ -10,17 +10,13 @@
  * of the License, or (at your option) any later version.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
-#include <sys/select.h>
 
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <signal.h>
 #include <limits.h>
 #include <unistd.h>
@@ -28,8 +24,9 @@
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
 
-#include "rua.h"
-#include "dcc.h"
+#include <rua.h>
+#include <dcc.h>
+#include <rcc.h>
 
 /** Define to play audio also. */
 #define PLAY_AUDIO
@@ -59,12 +56,10 @@
 #define AUDIO_TIME_RES 90000
 #define VIDEO_TIME_RES 30000
 #define STC_TIME_RES 24000
-
-#define IR_DEVICE "/dev/ir"
-
-#define RC_POWER 0xf50a4040
-#define RC_STOP 0xf7084040
-#define RC_OK 0xf20d4040
+#define MAX_SPEED 2
+#define MIN_SPEED -2
+/** Maximum time to buffer data when paused. */
+#define MAX_BUFFER_TIME (30 * VIDEO_TIME_RES)
 
 typedef struct {
 	struct RUA *pRUA;
@@ -90,7 +85,11 @@ typedef struct {
 	/** Last time buffered. */
 	int64_t last_time;
 	int playing;
+
+	/* Remote control */
 	volatile int stopped;
+	volatile int paused;
+	volatile int speed;
 	int irfd;
 } app_rua_context_t;
 
@@ -157,11 +156,26 @@ static void cleanup(app_rua_context_t *context)
 	}
 
 	if (context->irfd >= 0) {
-		close(context->irfd);
+		RCCClose(context->irfd);
 		context->irfd = -1;
 	}
 
 	fprintf(stderr, "end cleanup\n");
+}
+
+static RMstatus set_speed(app_rua_context_t *context)
+{
+	int su;
+	int sd;
+
+	su = 1;
+	sd = 1;
+	if (context->speed > 0) {
+		su += context->speed;
+	} else if (context->speed < 0) {
+		sd -= context->speed;
+	}
+	return DCCSTCSetSpeed(context->pStcSource, su, sd);
 }
 
 static unsigned int get_key(app_rua_context_t *context)
@@ -169,30 +183,71 @@ static unsigned int get_key(app_rua_context_t *context)
 	unsigned int key = 0;
 
 	if (context->irfd >= 0) {
-		fd_set rfds;
-		struct timeval tv;
-		int ret;
+		key = RCCGetKey(context->irfd, 0);
+		switch(key) {
+			case RC_POWER:
+			case RC_STOP:
+				context->stopped = 1;
+				break;
 
-		FD_ZERO(&rfds);
-		FD_SET(context->irfd, &rfds);
-		tv.tv_sec = 0;
-		tv.tv_usec = 0;
+			case RC_OK:
+				if (context->paused) {
+					context->paused = 0;
+					if (context->playing) {
+						RMstatus rv;
 
-		ret = select(context->irfd + 1, &rfds, NULL, NULL, &tv);
-		if (ret) {
-			ret = read(context->irfd, &key, sizeof(key));
-			if (ret != sizeof(key)) {
-				fprintf(stderr, "Failed to read " IR_DEVICE " ret = %d.\n", ret);
-			} else {
-				switch(key) {
-					case RC_POWER:
-					case RC_STOP:
-						context->stopped = 1;
-						break;
-					default:
-						break;
+						printf("Playing\n");
+						rv = DCCSTCPlay(context->pStcSource);
+						if (RMFAILED(rv)) {
+							fprintf(stderr, "Cannot start, rv = %d\n", rv);
+						}
+					}
+				} else {
+					if (context->playing) {
+						RMstatus rv;
+
+						context->paused = 1;
+						printf("Pausing\n");
+						rv = DCCSTCStop(context->pStcSource);
+						if (RMFAILED(rv)) {
+							fprintf(stderr, "Cannot stop, rv = %d\n", rv);
+						}
+					}
 				}
-			}
+				break;
+
+			case RC_LEFT:
+				if (context->playing) {
+					int rv;
+
+					if (context->speed > MIN_SPEED) {
+						context->speed--;
+					}
+
+					rv = set_speed(context);
+					if (RMFAILED(rv)) {
+						fprintf(stderr, "Cannot set speed to %d, rv = %d\n", context->speed, rv);
+					}
+				}
+				break;
+
+			case RC_RIGHT:
+				if (context->playing) {
+					int rv;
+
+					if (context->speed < MAX_SPEED) {
+						context->speed++;
+					}
+
+					rv = set_speed(context);
+					if (RMFAILED(rv)) {
+						fprintf(stderr, "Cannot set speed to %d, rv = %d\n", context->speed, rv);
+					}
+				}
+				break;
+
+			default:
+				break;
 		}
 	}
 
@@ -256,6 +311,8 @@ static RMstatus video_init(app_rua_context_t *context)
 		cleanup(context);
 		return rv;
 	}
+
+	context->speed = 0;
 
 	return RM_OK;
 }
@@ -496,6 +553,16 @@ static int write_audio_packet(void *opaque, uint8_t *buf, int buf_size)
 
 	do {
 		rv = transfer_data(context, buf, buf_size, context->audio_decoder, &context->audiobuffer, &bufpos);
+		if (rv == RM_PENDING) {
+			if (context->stopped) {
+				fprintf(stderr, "Buffer overrun while stopped.\n");
+				return -1;
+			}
+			if (context->paused) {
+				fprintf(stderr, "Buffer overrun while pausing.\n");
+				get_key(context);
+			}
+		}
 	} while (rv == RM_PENDING);
 	if (rv == RM_ERROR) {
 		return -1;
@@ -742,12 +809,27 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		AVFormatContext *ofmt_ctx;
 		const char *type;
 		int64_t cur_time;
+		RMstatus rv;
+		RMuint64 time;
 
 		get_key(context);
 
 		if (context->stopped) {
 			printf("Received signal, stopping...\n");
 			break;
+		}
+		rv = DCCSTCGetTime(context->pStcSource, &time, VIDEO_TIME_RES);
+		if (RMFAILED(rv)) {
+			fprintf(stderr, "Cannot get time, rv = %d\n", rv);
+			cleanup(context);
+			return rv;
+		}
+		if (context->paused) {
+			if ((context->last_time > 0)
+				&& (((uint64_t) context->last_time) > (time + MAX_BUFFER_TIME))) {
+				/* Wait until stuff is played. */
+				continue;
+			}
 		}
 
 		ret = av_read_frame(ifmt_ctx, &pkt);
@@ -767,9 +849,6 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 			continue;
 		}
 #ifdef TIMEDEBUG
-		RMstatus rv;
-		RMuint64 time;
-
 		rv = DCCSTCGetTime(context->pStcSource, &time, out_stream->time_base.den/out_stream->time_base.num);
 		if (RMFAILED(rv)) {
 			fprintf(stderr, "Cannot get time, rv = %d\n", rv);
@@ -854,7 +933,6 @@ static int play_mp4_video(app_rua_context_t *context, const char *videofile, int
 		if (!started) {
 			if ((startplaypts == 0) || (in_stream->codec->codec_type == AVMEDIA_TYPE_VIDEO)) {
 				if ((startplaypts == 0) || (pkt.pts >= startplaypts)) {
-					RMstatus rv;
 					int64_t start_time;
 
 					start_time = av_rescale_q(startpts, out_stream->time_base, time_base);
@@ -988,7 +1066,7 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 		return rv;
 	}
 
-	rv = DCCSTCSetSpeed(context->pStcSource, 1, 1);
+	rv = set_speed(context);
 	if (RMFAILED(rv)) {
 		fprintf(stderr, "Cannot set play speed, rv = %d\n", rv);
 		cleanup(context);
@@ -1055,12 +1133,14 @@ static RMstatus play_video(app_rua_context_t *context, const char *videofile)
 			} while((context->last_time > 0) && (((RMuint64) context->last_time) >= time));
 		}
 
-		printf("Stop play\n");
-		rv = DCCSTCStop(context->pStcSource);
-		if (RMFAILED(rv)) {
-			fprintf(stderr, "Cannot stop, rv = %d\n", rv);
-			cleanup(context);
-			return rv;
+		if (!context->paused) {
+			printf("Stop play\n");
+			rv = DCCSTCStop(context->pStcSource);
+			if (RMFAILED(rv)) {
+				fprintf(stderr, "Cannot stop, rv = %d\n", rv);
+				cleanup(context);
+				return rv;
+			}
 		}
 		rv = DCCStopVideoSource(context->pVideoSource, DCCStopMode_BlackFrame);
 		if (RMFAILED(rv)) {
@@ -1135,9 +1215,9 @@ int main(int argc, char *argv[])
 	}
 	DPRINTF("video_init() success\n");
 
-	context->irfd = open(IR_DEVICE, O_RDONLY);
+	context->irfd = RCCOpen();
 	if (context->irfd < 0) {
-		perror("Failed to open " IR_DEVICE);
+		fprintf(stderr, "Failed to open remote control.");
 		cleanup(context);
 		return 1;
 	}

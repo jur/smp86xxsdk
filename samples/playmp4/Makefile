@@ -26,6 +26,7 @@ LDLIBS += -lavformat
 LDLIBS += -lavcodec
 LDLIBS += -lavutil
 LDLIBS += -lz
+LDLIBS += -lrcc
 LDLIBS += -lpthread
 LDLIBS += -lm
 OBJS = $(addsuffix .o,$(MODS))
@@ -49,6 +50,7 @@ CPPFLAGS += -I$(SMPSDKBASE)/include
 LDFLAGS += -L$(SMPSDKBASE)/libllad
 LDFLAGS += -L$(SMPSDKBASE)/librua
 LDFLAGS += -L$(SMPSDKBASE)/libdcc
+LDFLAGS += -L$(SMPSDKBASE)/librcc
 
 all: $(PROGRAM)
 
