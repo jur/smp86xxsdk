@@ -14,6 +14,7 @@ libraries:
 	$(MAKE) -C libllad all
 	$(MAKE) -C librua all
 	$(MAKE) -C libdcc all
+	$(MAKE) -C librcc all
 	$(MAKE) -C liboslayer all
 
 samples:
@@ -25,6 +26,7 @@ install-libaries:
 	$(MAKE) -C libllad install
 	$(MAKE) -C librua install
 	$(MAKE) -C libdcc install
+	$(MAKE) -C librcc install
 	$(MAKE) -C liboslayer install
 
 install-samples:
@@ -59,5 +61,6 @@ clean:
 	$(MAKE) -C libllad clean
 	$(MAKE) -C librua clean
 	$(MAKE) -C libdcc clean
+	$(MAKE) -C librcc clean
 	$(MAKE) -C liboslayer clean
 	$(MAKE) -C samples clean
